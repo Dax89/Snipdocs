@@ -13,7 +13,7 @@ CPMAddPackage("gh:gabime/spdlog@1.11.0")
 
 add_executable(${PROJECT_NAME})
 
-if(UNIX AND NOT APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_definitions(${PROJECT_NAME} PUBLIC "_GLIBCXX_DEBUG")
 endif()
 
