@@ -41,9 +41,6 @@ namespace impl {
     
 } // namespace impl
 
-
-#define __
-
 #define assume(...) \
     do { \
         if(intrinsic_unlikely(!(__VA_ARGS__))) { \
