@@ -13,10 +13,6 @@ CPMAddPackage("gh:gabime/spdlog@1.11.0")
 
 add_executable(${PROJECT_NAME})
 
-if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_compile_definitions(${PROJECT_NAME} PUBLIC "_GLIBCXX_DEBUG")
-endif()
-
 target_link_libraries(${PROJECT_NAME}
     PUBLIC
         #fmt
@@ -46,6 +42,10 @@ target_include_directories(${PROJECT_NAME}
 )
 
 if(${CMAKE_BUILD_TYPE} MATCHES Debug)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_compile_definitions(${PROJECT_NAME} PUBLIC "_GLIBCXX_DEBUG")
+    endif()
+
     target_compile_options(${PROJECT_NAME}
         PUBLIC
         "-Wall"                     # essential
