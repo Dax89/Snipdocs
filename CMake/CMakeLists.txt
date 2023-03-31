@@ -5,19 +5,21 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake/modules"
 
 include(cmake/CPM.cmake) # https://github.com/TheLartians/CPM.cmake
 
+#CPMAddPackage("gh:TartanLlama/optional@1.1.0")
 #CPMAddPackage("gh:TartanLlama/expected@1.1.0")
 #CPMAddPackage("gh:google/re2#2023-02-01")
-#CPMAddPackage("gh:fmtlib/fmt#9.1.0")
 #CPMAddPackage("gh:eliaskosunen/scnlib@1.1.2")
+CPMAddPackage("gh:fmtlib/fmt#9.1.0")
 CPMAddPackage("gh:gabime/spdlog@1.11.0")
 
 add_executable(${PROJECT_NAME})
 
 target_link_libraries(${PROJECT_NAME}
     PUBLIC
-        #fmt
-        #scn::scn
+        fmt
         spdlog
+        #scn::scn
+        #optional
         #expected
         #re2
 )
