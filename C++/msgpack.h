@@ -274,6 +274,13 @@ struct BasicMsgPack
     }
 
     template<typename T>
+    inline T unpack() {
+        T t;
+        this->unpack(t);
+        return t;
+    }
+
+    template<typename T>
     type& unpack(T& t) {
         using U = std::decay_t<T>;
 
