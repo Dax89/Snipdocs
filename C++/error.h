@@ -44,19 +44,19 @@ namespace impl {
 #define assume(...) \
     do { \
         if(intrinsic_unlikely(!(__VA_ARGS__))) { \
-            SPDLOG_ERROR("Assume condition failed: '{}'", #__VA_ARGS__); \
+            SPDLOG_CRITICAL("Assume condition failed: '{}'", #__VA_ARGS__); \
             ::impl::trap(); \
         } \
     } while(false)
 
 #define unreachable \
     do { \
-        SPDLOG_ERROR("Unreachable code detected"); \
+        SPDLOG_CRITICAL("Unreachable code detected"); \
         ::impl::unreachable(); \
     } while(false)
 
 #define except(...) \
     do { \
-        SPDLOG_ERROR(__VA_ARGS__); \
+        SPDLOG_CRITICAL(__VA_ARGS__); \
         ::impl::abort(); \
     } while(false)
