@@ -18,6 +18,7 @@
     #error "Unsupported operating system"
 #endif
 
+
 namespace impl {
 
 template<typename> constexpr bool always_false_v = false;
@@ -168,9 +169,11 @@ inline size_t fnv1a(double value) {
 struct Serializer {
     template<typename T, typename Reader>
     static void deserialize(T& t, Reader r) {
-        if constexpr(std::is_integral_v<T> || std::is_floating_point_v<T>)
+        using U = std::decay_t<T>;
+
+        if constexpr(std::is_integral_v<U> || std::is_floating_point_v<U>)
             r(reinterpret_cast<void*>(&t), sizeof(T));
-        else if constexpr(std::is_same_v<T, std::string>) {
+        else if constexpr(std::is_same_v<U, std::string>) {
             std::string::size_type size;
             r(reinterpret_cast<void*>(&size), sizeof(std::string::size_type));
 
@@ -183,9 +186,11 @@ struct Serializer {
 
     template<typename T, typename Writer>
     static void serialize(T&& t, Writer w) {
-        if constexpr(std::is_integral_v<T> || std::is_floating_point_v<T>)
+        using U = std::decay_t<T>;
+
+        if constexpr(std::is_integral_v<U> || std::is_floating_point_v<U>)
             w(reinterpret_cast<void*>(&t), sizeof(T));
-        else if constexpr(std::is_same_v<T, std::string>) {
+        else if constexpr(std::is_same_v<U, std::string>) {
             std::string::size_type size = t.size();
             w(reinterpret_cast<void*>(&size), sizeof(std::string::size_type));
             w(t.c_str(), t.size());
@@ -197,18 +202,18 @@ struct Serializer {
 
 } // namespace impl
 
-enum disk_map_flags {
-    disk_map_flags_none  = 0,
-    disk_map_flags_split = (1 << 0),
-    disk_map_flags_remove = (1 << 1),
+enum hashdb_flags {
+    hashdb_flags_none   = 0,
+    hashdb_flags_split  = (1 << 0),
+    hashdb_flags_remove = (1 << 1),
 };
 
-template<typename K, typename V, size_t Flags = disk_map_flags_none, typename Serializer = impl::Serializer>
-class disk_map
+template<typename K, typename V, size_t Flags = hashdb_flags_none, typename Serializer = impl::Serializer>
+class HashDB
 {
-    using Self = disk_map<K, V, Flags, Serializer>;
+    using Self = HashDB<K, V, Flags, Serializer>;
 
-    static constexpr bool SPLIT_VALUE = (Flags & disk_map_flags_split) || (sizeof(V) > sizeof(uintptr_t));
+    static constexpr bool SPLIT_VALUE = (Flags & hashdb_flags_split) || (sizeof(V) > sizeof(uintptr_t));
     static constexpr size_t SIGNATURE = 0x5d1b0239;
     static constexpr size_t DEFAULT_ITEMS_COUNT = 4096;
     static constexpr float MAX_FILL_CAPACITY = 0.75;
@@ -286,7 +291,28 @@ class disk_map
     };
 
 public:
-    disk_map(const std::string& name, std::string basepath = std::string{}) {
+    HashDB() = default;
+    HashDB(const std::string& name, std::string basepath = std::string{}) { this->open(name, basepath); }
+    ~HashDB() { this->close(); }
+
+    void close() {
+        if(m_hash) impl::munmap(m_hash, m_hash->capacity * sizeof(kv_pair));
+        if(m_fhash != impl::INVALID_HANDLE) impl::close(m_fhash);
+        if(m_fvalue != impl::INVALID_HANDLE) impl::close(m_fvalue);
+
+        m_hash = nullptr;
+        m_fhash = impl::INVALID_HANDLE;
+        m_fvalue = impl::INVALID_HANDLE;
+
+        if constexpr(Flags & hashdb_flags_remove) {
+            if(!m_fvaluepath.empty()) std::remove(m_fvaluepath.c_str());
+            if(!m_fhashpath.empty()) std::remove(m_fhashpath.c_str());
+            m_fvaluepath.clear();
+            m_fhashpath.clear();
+        }
+    }
+
+    void open(const std::string& name, std::string basepath = std::string{}) {
         assume(!name.empty());
         if(!basepath.empty()) basepath.append(impl::PATH_SEPARATOR);
 
@@ -307,20 +333,6 @@ public:
         }
         else
             m_hash->valuecapacity = 0;
-    }
-
-    ~disk_map() {
-        if(m_hash) impl::munmap(m_hash, m_hash->capacity * sizeof(kv_pair));
-        if(m_fhash != impl::INVALID_HANDLE) impl::close(m_fhash);
-        if(m_fvalue != impl::INVALID_HANDLE) impl::close(m_fvalue);
-
-        m_fhash = impl::INVALID_HANDLE;
-        m_fvalue = impl::INVALID_HANDLE;
-
-        if constexpr(Flags & disk_map_flags_remove) {
-            if(!m_fvaluepath.empty()) std::remove(m_fvaluepath.c_str());
-            if(!m_fhashpath.empty()) std::remove(m_fhashpath.c_str());
-        }
     }
 
     iterator begin() const {
@@ -358,7 +370,7 @@ public:
         e.state = STATE_TOMBSTONE;
     }
 
-    void set(K k, V&& v) {
+    void set(K k, const V& v) {
         this->check_rehash();
 
         kv_pair& e = this->get_entry(k);
@@ -371,7 +383,7 @@ public:
             size_t n = 0;
             m_wbuffer.clear();
 
-            Serializer::serialize(std::forward<V>(v), [&](const void* data, size_t size) {
+            Serializer::serialize(v, [&](const void* data, size_t size) {
                 m_wbuffer.resize(m_wbuffer.size() + size);
                 std::copy_n(reinterpret_cast<const char*>(data), size, m_wbuffer.data() + n);
                 n += size;
@@ -393,6 +405,8 @@ public:
 
         e.state = STATE_FULL;
     }
+
+    void set(K k, V&& v) { this->set(k, std::move(v)); }
 
     bool get(K k, V& v) const {
         if(this->empty()) return false;
@@ -494,7 +508,7 @@ public:
     }
 
 private:
-    disk_map(impl::file_h fhash, [[maybe_unused]] const std::string& name, [[maybe_unused]] const std::string basepath): m_fhash{fhash} {
+    HashDB(impl::file_h fhash, [[maybe_unused]] const std::string& name, [[maybe_unused]] const std::string basepath): m_fhash{fhash} {
         assume(m_fhash != impl::INVALID_HANDLE);
         m_fhashpath = basepath + impl::HASH_SUFFIX;
 
