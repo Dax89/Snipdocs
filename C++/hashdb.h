@@ -295,6 +295,21 @@ public:
     HashDB(const std::string& name, std::string basepath = std::string{}) { this->open(name, basepath); }
     ~HashDB() { this->close(); }
 
+    bool is_open() const {
+        if(m_fhashpath.empty() ||
+           m_fhash == impl::INVALID_HANDLE ||
+           m_hash == nullptr)
+            return false;
+
+        if constexpr(SPLIT_VALUE) {
+            return !m_fvaluepath.empty() && 
+                   m_fhash != impl::INVALID_HANDLE &&
+                   m_hash != nullptr;
+        }
+
+        return true;
+    }
+
     void close() {
         if(m_hash) impl::munmap(m_hash, m_hash->capacity * sizeof(kv_pair));
         if(m_fhash != impl::INVALID_HANDLE) impl::close(m_fhash);
