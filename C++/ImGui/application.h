@@ -27,7 +27,6 @@ public:
     int run() {
         if(ImGui::GetCurrentContext()) return 1;
 
-        this->initialize();
         glfwSetErrorCallback(&Application<Derived>::glfw_error);
 
         if(glfwInit()) {
@@ -50,6 +49,7 @@ public:
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;      // Enable Docking
         io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;    // Enable Multi-Viewport / Platform Windows
 #endif
+        this->setup();
 
         ImGui_ImplGlfw_InitForOpenGL(this->m_window, true);
         ImGui_ImplOpenGL2_Init();
@@ -78,7 +78,7 @@ public:
         return 0;
     }
 
-    void initialize() { static_cast<Derived*>(this)->initialize(); }
+    void setup() { static_cast<Derived*>(this)->setup(); }
     void update() { static_cast<Derived*>(this)->update(); }
     const std::string& title() { return this->m_title; }
 
