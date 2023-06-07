@@ -5,6 +5,12 @@
 #include <spdlog/spdlog.h>
 
 #if defined(__GNUC__) // GCC, Clang, ICC
+    #include <array>
+    #include <string_view>
+    #include <execinfo.h>
+    #include <unistd.h>
+    #include <cxxabi.h>
+
     #define intrinsic_trap()        __builtin_trap()
     #define intrinsic_unreachable() __builtin_unreachable()
     #define intrinsic_unlikely(x)   __builtin_expect(!!(x), 0)
@@ -20,18 +26,73 @@
 
 namespace impl {
 
+#if defined(__GNUC__)
+
+inline std::string parse_backtrace(const char* b) {
+    std::string_view bt = b;
+    std::string s;
+
+    size_t start = bt.find("(");
+    if(start == std::string_view::npos) return b;
+
+    size_t end = bt.find("+", ++start);
+    if(end == std::string_view::npos || end == start) {
+        ++start; // Skip '+'
+        end = bt.find(")", end);
+        if(end == std::string::npos) s.assign(b);
+        else s.assign(b, start, end - start);
+    }
+    else {
+        s.assign(b, start, end - start);
+
+        size_t len{};
+        int status{};
+        char* unmangled = ::abi::__cxa_demangle(s.c_str(), nullptr, &len, &status);
+
+        if(unmangled) {
+            s.assign(unmangled);
+            std::free(unmangled);
+        }
+    }
+
+    return s;
+}
+
+inline void print_backtrace() {
+    fmt::print("---------- BACKTRACE ----------\n");
+
+    std::array<void*, 10> trace;
+    size_t size = ::backtrace(trace.data(), trace.size());
+    char** symbols = ::backtrace_symbols(trace.data(), size);
+
+    for(size_t i = 0; i < size; i++)
+        fmt::print("#{} {}\n", i, impl::parse_backtrace(symbols[i]));
+
+    std::free(symbols);
+    fmt::print("-------------------------------\n");
+}
+
+#else 
+
+inline void print_backtrace() { }
+
+#endif
+
 [[noreturn]] inline void trap() {
+    impl::print_backtrace();
     std::fflush(nullptr);
     intrinsic_trap();
 }
 
 [[noreturn]] inline void abort() {
+    impl::print_backtrace();
     std::fflush(nullptr);
     std::abort();
 }
 
 [[noreturn]] inline void unreachable() {
 #if defined(NDEBUG) // Release
+    impl::print_backtrace();
     std::fflush(nullptr);
     intrinsic_unreachable();
 #else
@@ -40,6 +101,8 @@ namespace impl {
 }
     
 } // namespace impl
+
+#define print_backtrace impl::print_backtrace();
 
 #define assume(...) \
     do { \
@@ -60,3 +123,4 @@ namespace impl {
         SPDLOG_CRITICAL(__VA_ARGS__); \
         ::impl::abort(); \
     } while(false)
+
