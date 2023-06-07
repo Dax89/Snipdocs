@@ -13,9 +13,9 @@ class Application
 {
 public:
     ~Application() {
-        if(m_window) {
-            glfwDestroyWindow(m_window);
-            m_window = nullptr;
+        if(this->m_window) {
+            glfwDestroyWindow(this->m_window);
+            this->m_window = nullptr;
         }
 
         ImGui_ImplOpenGL2_Shutdown();
@@ -31,9 +31,9 @@ public:
         glfwSetErrorCallback(&Application<Derived>::glfw_error);
 
         if(glfwInit()) {
-            m_window = glfwCreateWindow(this->width, this->height, this->m_title.c_str(), nullptr, nullptr);
-            if(!m_window) except("Error creating GLFWwindow");
-            glfwMakeContextCurrent(m_window);
+            this->m_window = glfwCreateWindow(this->width, this->height, this->m_title.c_str(), nullptr, nullptr);
+            if(!this->m_window) except("Error creating GLFWwindow");
+            glfwMakeContextCurrent(this->m_window);
             glfwSwapInterval(1); // Enable vsync
         }
 
@@ -45,10 +45,10 @@ public:
         ImGuiIO io{ImGui::GetIO()};
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-        ImGui_ImplGlfw_InitForOpenGL(m_window, true);
+        ImGui_ImplGlfw_InitForOpenGL(this->m_window, true);
         ImGui_ImplOpenGL2_Init();
 
-        while(!glfwWindowShouldClose(m_window)) {
+        while(!glfwWindowShouldClose(this->m_window)) {
             glfwPollEvents();
 
             ImGui_ImplOpenGL2_NewFrame();
@@ -58,15 +58,15 @@ public:
             ImGui::Render();
 
             int w, h;
-            glfwGetFramebufferSize(m_window, &w, &h);
+            glfwGetFramebufferSize(this->m_window, &w, &h);
             glViewport(0, 0, w, h);
             glClearColor(0, 0, 0, 1.0);
             glClear(GL_COLOR_BUFFER_BIT);
 
             ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
 
-            glfwMakeContextCurrent(m_window);
-            glfwSwapBuffers(m_window);
+            glfwMakeContextCurrent(this->m_window);
+            glfwSwapBuffers(this->m_window);
         }
 
         return 0;
@@ -74,11 +74,11 @@ public:
 
     void initialize() { static_cast<Derived*>(this)->initialize(); }
     void update() { static_cast<Derived*>(this)->update(); }
-    const std::string& title() { return m_title; }
+    const std::string& title() { return this->m_title; }
 
     void set_title(const std::string& title) {
-        m_title = title;
-        if(m_window) glfwSetWindowTitle(m_window, m_title.c_str());
+        this->m_title = title;
+        if(this->m_window) glfwSetWindowTitle(this->m_window, this->m_title.c_str());
     }
 
 private:
