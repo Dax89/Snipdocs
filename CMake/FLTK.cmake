@@ -15,6 +15,7 @@ else()
 
     CPMAddPackage(FLTK
         GITHUB_REPOSITORY "fltk/fltk"
+        # GIT_TAG "master"
         GIT_TAG "release-1.3.8"
         OPTIONS
             "FLTK_BUILD_TEST OFF"
