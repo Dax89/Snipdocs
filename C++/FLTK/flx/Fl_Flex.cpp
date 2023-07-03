@@ -1,4 +1,4 @@
-#include "Fl_Flex.H"
+#include "Fl_Flex.h"
 #include <cmath>
 
 namespace flx {
