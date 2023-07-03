@@ -1,4 +1,4 @@
-#include "Fl_Grid.H"
+#include "Fl_Grid.h"
 
 namespace flx {
 
