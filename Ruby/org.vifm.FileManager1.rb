@@ -11,7 +11,7 @@ def open_file_manager(uri, select: false)
   path = path[7..] if path.start_with? 'file://'
   args.append path
 
-  IO.popen(args.join(' '))
+  system "#{args.join(' ')}&"
 end
 
 class FileManager < DBus::Object
