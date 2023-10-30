@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cctype>
+#include <string_view>
+
 template<class... Ts> struct Overload : Ts... { using Ts::operator()...; };
 
 #if __cplusplus >= 202002L
