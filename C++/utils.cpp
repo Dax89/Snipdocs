@@ -1,9 +1,38 @@
 #include <cstddef>
 #include <vector>
 #include <string_view>
+#include <array>
+#include <fmt/core.h>
+#include <sstream>
+#include <iomanip>
 
-std::vector<std::string_view> split(std::string_view sv, char sep)
-{
+std::string file_size(double size) {
+    static constexpr std::array<const char*, 9> UNITS = {
+        "B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"};
+
+    int i = 0;
+
+    while(size > 1024) {
+        size /= 1024.0;
+        i++;
+    }
+
+#if __has_include(<fmt/core.h>)
+    return fmt::format("{:.2f}{}", size, UNITS.at(i));
+#else
+    std::ostringstream o;
+    o << std::fixed 
+      << std::setprecision(2) 
+      << size
+      << UNITS.at(i);
+
+    return o.str();
+#endif
+
+    return std::to_string(size) + " " + UNITS.at(i);
+}
+
+std::vector<std::string_view> split(std::string_view sv, char sep) {
     std::vector<std::string_view> s;
     size_t start = 0;
 
