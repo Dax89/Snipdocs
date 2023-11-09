@@ -28,8 +28,6 @@ std::string file_size(double size) {
 
     return o.str();
 #endif
-
-    return std::to_string(size) + " " + UNITS.at(i);
 }
 
 std::vector<std::string_view> split(std::string_view sv, char sep) {
