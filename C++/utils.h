@@ -1,11 +1,15 @@
 #pragma once
 
 #include <cctype>
+#include <cstdint>
 #include <string_view>
 #include <memory>
+#include <vector>
+
+using Data = std::vector<uint8_t>;
 
 template<typename T>
-using PImpl = const std::unique_ptr<T>;
+using Impl = const std::unique_ptr<T>;
 
 template<class... Ts>
 struct Overload : Ts... { using Ts::operator()...; };
