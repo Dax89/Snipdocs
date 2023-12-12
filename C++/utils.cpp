@@ -5,6 +5,7 @@
 #include <fmt/core.h>
 #include <sstream>
 #include <iomanip>
+#include <fstream>
 
 std::string file_size(double size) {
     static constexpr std::array<const char*, 9> UNITS = {
@@ -74,4 +75,27 @@ void splittrim_each(std::string_view s, char ch, Function f) {
 
     if(start < s.size())
         f(trim(s.substr(start)));
+}
+
+Data read_file(const std::string& filepath) {
+    std::ifstream ifs(filepath, std::ios::binary | std::ios::ate);
+    std::ifstream::pos_type pos = ifs.tellg();
+
+    Data result(pos);
+
+    ifs.seekg(0, std::ios::beg)
+        .read(reinterpret_cast<char*>(result.data()), pos);
+
+    return result;
+}
+
+bool write_file(const std::string& filepath, const Data& data) {
+    std::ofstream ofs;
+
+    ofs.open(filepath, std::ios::binary);
+    if(!ofs.is_open())
+        return false;
+
+    ofs.write(reinterpret_cast<const char*>(data.data()), data.size());
+    return true;
 }
