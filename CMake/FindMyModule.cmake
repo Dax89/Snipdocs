@@ -1,6 +1,16 @@
+#find_package(PkgConfig QUIET)
+#pkg_check_modules(PC_mymodule QUIET mymodule)
+
 if(NOT mymodule_FOUND)
-    find_path(mymodule_INCLUDE_DIR mymodule.h)
-    find_library(mymodule_LIBRARIES mymodulelib)
+    find_path(mymodule_INCLUDE_DIR
+        NAMES mymodule.h
+        #HINTS ${PC_mymodule_INCLUDE_DIRS}
+    )
+
+    find_library(mymodule_LIBRARIES
+        NAMES mymodule
+        #HINTS ${PC_mymodule_LIBRARY_DIRS}
+    )
 
     if(mymodule_INCLUDE_DIR AND mymodule_LIBRARIES)
         set(mymodule_FOUND TRUE)
