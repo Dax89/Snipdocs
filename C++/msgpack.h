@@ -1,5 +1,7 @@
 #pragma once
 
+#define MSGPACK_NAMESPACE redasm
+
 // https://github.com/msgpack/msgpack/blob/master/spec.md
 
 #include <algorithm>
@@ -20,17 +22,17 @@
 #include <vector>
 
 #if defined(__EXCEPTIONS) || defined(_CPPUNWIND)
-    #include <stdexcept>
+#include <stdexcept>
 #endif
 
 #if defined(__BYTE_ORDER)
-    #if defined(__BIG_ENDIAN) && (__BYTE_ORDER == __BIG_ENDIAN)
-        #define MSGPACK_BIG_ENDIAN
-    #elif defined(__LITTLE_ENDIAN) && (__BYTE_ORDER == __LITTLE_ENDIAN)
-        #define MSGPACK_LITTLE_ENDIAN
-    #else
+#if defined(__BIG_ENDIAN) && (__BYTE_ORDER == __BIG_ENDIAN)
+#define MSGPACK_BIG_ENDIAN
+#elif defined(__LITTLE_ENDIAN) && (__BYTE_ORDER == __LITTLE_ENDIAN)
+#define MSGPACK_LITTLE_ENDIAN
+#else
 static_assert(false, "MsgPack: Unsupported endianness")
-    #endif
+#endif
 #else
 static_assert(false, "MsgPack: Cannot detect byte order")
 #endif
@@ -183,7 +185,8 @@ T swap_bigendian(T t) {
 
 template<typename T, typename MsgPackType>
 bool visit_type(MsgPackType& mp, T& t) {
-    if(mp.at_end()) return false;
+    if(mp.at_end())
+        return false;
     mp.unpack(t);
     return true;
 }
@@ -193,24 +196,28 @@ bool visit(MsgPackType& mp, VisitorType&& visitor);
 
 template<typename MsgPackType, typename VisitorType>
 bool visit_bin(MsgPackType& mp, VisitorType&& visitor) {
-    if(mp.at_end()) return false;
+    if(mp.at_end())
+        return false;
     auto c = mp.unpack_bin();
     return visitor.visit_bin(c);
 }
 
 template<typename MsgPackType, typename VisitorType>
 bool visit_ext(MsgPackType& mp, VisitorType&& visitor) {
-    if(mp.at_end()) return false;
+    if(mp.at_end())
+        return false;
     auto [type, ext] = mp.unpack_ext();
     return visitor.visit_ext(type, ext);
 }
 
 template<typename MsgPackType, typename VisitorType>
 bool visit_array(MsgPackType& mp, VisitorType&& visitor) {
-    if(mp.at_end()) return false;
+    if(mp.at_end())
+        return false;
 
     size_t s = mp.unpack_array();
-    if(!visitor.start_array(s)) return false;
+    if(!visitor.start_array(s))
+        return false;
 
     for(size_t i = 0; i < s; ++i) {
         if(!visitor.start_array_item(i) ||
@@ -224,10 +231,12 @@ bool visit_array(MsgPackType& mp, VisitorType&& visitor) {
 
 template<typename MsgPackType, typename VisitorType>
 bool visit_map(MsgPackType& mp, VisitorType&& visitor) {
-    if(mp.at_end()) return false;
+    if(mp.at_end())
+        return false;
 
     size_t s = mp.unpack_map();
-    if(!visitor.start_map(s)) return false;
+    if(!visitor.start_map(s))
+        return false;
 
     for(size_t i = 0; i < s; ++i) {
         if(!visitor.start_map_key(i) ||
@@ -245,11 +254,13 @@ bool visit_map(MsgPackType& mp, VisitorType&& visitor) {
 
 template<typename MsgPackType, typename VisitorType>
 bool visit(MsgPackType& mp, VisitorType&& visitor) {
-    if(mp.at_end()) return false;
+    if(mp.at_end())
+        return false;
 
     auto f = static_cast<uint8_t>(mp.buffer.get()[mp.pos]);
 
-    if((f & 0xF0) == impl::Format::FIXMAP) return impl::visit_map(mp, visitor);
+    if((f & 0xF0) == impl::Format::FIXMAP)
+        return impl::visit_map(mp, visitor);
     if((f & 0xF0) == impl::Format::FIXARRAY)
         return impl::visit_array(mp, visitor);
     if((f & 0xE0) == impl::Format::FIXSTR) {
@@ -455,11 +466,14 @@ struct BasicMsgPack {
                 this->pack(value);
             }
         }
-        else if constexpr(impl::is_string_v<U>) this->pack_string(t);
-        else if constexpr(impl::is_bool_v<U>) this->pack_bool(t);
+        else if constexpr(impl::is_string_v<U>)
+            this->pack_string(t);
+        else if constexpr(impl::is_bool_v<U>)
+            this->pack_bool(t);
         else if constexpr(std::is_enum_v<U>)
             this->pack_int(static_cast<std::underlying_type_t<U>>(t));
-        else if constexpr(std::is_integral_v<U>) this->pack_int(t);
+        else if constexpr(std::is_integral_v<U>)
+            this->pack_int(t);
         else if constexpr(std::is_null_pointer_v<U>)
             this->pack_format(impl::Format::NIL);
         else
@@ -571,13 +585,16 @@ struct BasicMsgPack {
         if constexpr(impl::is_array_v<U>) {
             size_t len = this->unpack_array();
 
-            if constexpr(impl::is_vector_v<U>) t.reserve(len);
+            if constexpr(impl::is_vector_v<U>)
+                t.reserve(len);
 
             for(size_t i = 0; i < len; ++i) {
                 typename U::value_type v;
                 this->unpack(v);
-                if constexpr(impl::is_vector_v<U>) t.push_back(v);
-                else t[i] = v;
+                if constexpr(impl::is_vector_v<U>)
+                    t.push_back(v);
+                else
+                    t[i] = v;
             }
         }
         else if constexpr(impl::is_map_v<U>) {
@@ -591,14 +608,17 @@ struct BasicMsgPack {
                 t[k] = v;
             }
         }
-        else if constexpr(impl::is_string_v<U>) this->unpack_string(t);
-        else if constexpr(impl::is_bool_v<U>) this->unpack_bool(t);
+        else if constexpr(impl::is_string_v<U>)
+            this->unpack_string(t);
+        else if constexpr(impl::is_bool_v<U>)
+            this->unpack_bool(t);
         else if constexpr(std::is_enum_v<U>) {
             std::underlying_type_t<U> u;
             this->unpack_int(u);
             t = static_cast<U>(u);
         }
-        else if constexpr(std::is_integral_v<U>) this->unpack_int(t);
+        else if constexpr(std::is_integral_v<U>)
+            this->unpack_int(t);
         else if constexpr(std::is_null_pointer_v<U>) {
             std::uint8_t f = this->unpack_format();
             assert(f == impl::Format::NIL);
@@ -684,7 +704,8 @@ private: // Packing
     template<typename T,
              typename = std::enable_if_t<std::is_integral_v<std::decay_t<T>>>>
     void pack_int(T t) {
-        if constexpr(sizeof(T) > sizeof(uint8_t)) t = impl::swap_bigendian(t);
+        if constexpr(sizeof(T) > sizeof(uint8_t))
+            t = impl::swap_bigendian(t);
 
         if constexpr(sizeof(T) == sizeof(uint8_t)) {
             if constexpr(std::is_signed_v<T>) {
@@ -731,9 +752,12 @@ private: // Packing
     }
 
     void pack_raw(const ValueType* p, size_t size) {
-        assert(p && size);
-        this->buffer.get().reserve(this->buffer.get().size() + size);
-        std::copy_n(p, size, std::back_inserter(this->buffer.get()));
+        assert(p);
+
+        if(size) {
+            this->buffer.get().reserve(this->buffer.get().size() + size);
+            std::copy_n(p, size, std::back_inserter(this->buffer.get()));
+        }
     }
 
     inline Type& pack_aggregate(size_t size,
@@ -749,7 +773,8 @@ private: // Packing
             this->pack_format(formats[2]);
             this->pack_length(static_cast<uint32_t>(size));
         }
-        else impl::msgpack_except("MsgPack::new_aggregate(): Unsupported Size");
+        else
+            impl::msgpack_except("MsgPack::new_aggregate(): Unsupported Size");
 
         return *this;
     }
@@ -762,8 +787,10 @@ private: // Unpacking
         if((f & 0xF0) == formats[0]) {
             len = f & 0x0F;
         }
-        else if(f == formats[1]) len = this->unpack_length<uint16_t>();
-        else if(f == formats[2]) len = this->unpack_length<uint32_t>();
+        else if(f == formats[1])
+            len = this->unpack_length<uint16_t>();
+        else if(f == formats[2])
+            len = this->unpack_length<uint32_t>();
         else
             impl::msgpack_except("MsgPack::unpack_aggregate(): Invalid Format");
 
@@ -800,7 +827,8 @@ private: // Unpacking
             this->unpack_int(l);
             len = l;
         }
-        else impl::msgpack_except("MsgPack::unpack_string(): Invalid Format");
+        else
+            impl::msgpack_except("MsgPack::unpack_string(): Invalid Format");
 
         if constexpr(std::is_same_v<T, std::string>) {
             t.resize(len);
@@ -867,14 +895,18 @@ private: // Unpacking
         }
 
         this->unpack_raw(reinterpret_cast<ValueType*>(&t), sizeof(U));
-        if constexpr(sizeof(U) > sizeof(uint8_t)) t = impl::swap_bigendian(t);
+        if constexpr(sizeof(U) > sizeof(uint8_t))
+            t = impl::swap_bigendian(t);
     }
 
     void unpack_bool(bool& b) {
         uint8_t f = this->unpack_format();
-        if(f == impl::Format::TRUE) b = true;
-        else if(f == impl::Format::FALSE) b = false;
-        else impl::msgpack_except("MsgPack::unpack_bool(): Invalid Format");
+        if(f == impl::Format::TRUE)
+            b = true;
+        else if(f == impl::Format::FALSE)
+            b = false;
+        else
+            impl::msgpack_except("MsgPack::unpack_bool(): Invalid Format");
     }
 
     uint8_t unpack_format() {
@@ -884,12 +916,15 @@ private: // Unpacking
     }
 
     void unpack_raw(ValueType* p, size_t size) {
-        assert(p && size);
-        auto endpos = this->pos + size;
-        if(endpos > this->buffer.get().size())
-            impl::msgpack_except("MsgPack::unpack_raw(): Reached EOB");
-        std::copy_n(this->buffer.get().begin() + this->pos, size, p);
-        this->pos = endpos;
+        assert(p);
+
+        if(size) {
+            auto endpos = this->pos + size;
+            if(endpos > this->buffer.get().size())
+                impl::msgpack_except("MsgPack::unpack_raw(): Reached EOB");
+            std::copy_n(this->buffer.get().begin() + this->pos, size, p);
+            this->pos = endpos;
+        }
     }
 
 public:
@@ -907,7 +942,8 @@ VisitorType& visit(const typename MsgPackType::ContainerType& c,
     MsgPackType mp{c};
 
     while(mp.pos < c.size()) {
-        if(!impl::visit(mp, std::forward<VisitorType>(visitor))) break;
+        if(!impl::visit(mp, std::forward<VisitorType>(visitor)))
+            break;
     }
 
     return visitor;
