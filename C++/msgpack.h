@@ -1,7 +1,5 @@
 #pragma once
 
-#define MSGPACK_NAMESPACE redasm
-
 // https://github.com/msgpack/msgpack/blob/master/spec.md
 
 #include <algorithm>
