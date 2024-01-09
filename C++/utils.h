@@ -35,3 +35,11 @@ void split_each(std::string_view s, char sep, Function f) {
     while(start < s.size() && std::isspace(s[start])) start++;
     if(start < s.size()) f(s.substr(start));
 }
+
+inline bool starts_with(std::string_view s, std::string_view w) {
+    return s.find(w) == 0;
+}
+inline bool ends_with(std::string_view s, std::string_view w) {
+    return s.size() >= w.size() &&
+           s.compare(s.size() - w.size(), w.size(), w) == 0;
+}
