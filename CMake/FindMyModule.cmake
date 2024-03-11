@@ -11,7 +11,7 @@ if(PC_mymodule_FOUND)
     set(mymodule_LIBRARIES "${PC_mymodule_LIBRARIES}")
 else()
     find_path(mymodule_INCLUDE_DIR NAMES mymodule.h)
-    find_library(mymodule_LIBRARIES NAMES ssh2 mymodule)
+    find_library(mymodule_LIBRARIES NAMES mymodule)
 
     if(mymodule_INCLUDE_DIR AND mymodule_LIBRARIES)
         set(mymodule_FOUND TRUE)
