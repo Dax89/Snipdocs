@@ -23,7 +23,7 @@ function(target_embed_files target_name)
 
     foreach(input IN LISTS EF_FILES)
         # Convert input to list
-        string(REPLACE ":" ";" input ${input})
+        string(REPLACE ":" ";" input "${input}")
         list(LENGTH input input_length)
 
         if(input_length GREATER 1)
