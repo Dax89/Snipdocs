@@ -7,7 +7,7 @@
 #include <variant>
 #include <vector>
 
-namespace redasm::lua::luaxx {
+namespace luaxx {
 
 using Nil = std::nullptr_t;
 using Bool = bool;
@@ -166,4 +166,4 @@ auto parse_args(lua_State* l) {
     return args;
 }
 
-} // namespace redasm::lua::luaxx
+} // namespace luaxx
