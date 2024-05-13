@@ -1,6 +1,6 @@
 #include "luaxx.h"
 
-namespace redasm::lua::luaxx {
+namespace luaxx {
 
 namespace {
 
@@ -104,4 +104,4 @@ void set_field(lua_State* l, int index, std::string_view k, const Type& v) {
     lua_setfield(l, index, k.data());
 }
 
-} // namespace redasm::lua::luaxx
+} // namespace luaxx
