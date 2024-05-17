@@ -6,6 +6,8 @@
 #include <sstream>
 #include <iomanip>
 #include <fstream>
+#include <codecvt>
+#include <locale>
 
 std::string file_size(double size) {
     static constexpr std::array<const char*, 9> UNITS = {
@@ -99,3 +101,9 @@ bool write_file(const std::string& filepath, const Data& data) {
     ofs.write(reinterpret_cast<const char*>(data.data()), data.size());
     return true;
 }
+
+std::wstring string_to_wstring(const std::string& str) {
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    return converter.from_bytes(str);
+}
+
