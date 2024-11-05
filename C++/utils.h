@@ -26,13 +26,11 @@ void split_each(std::string_view s, char sep, Function f) {
     size_t i = 0, start = 0;
 
     for( ; i < s.size(); i++) {
-        if(std::isspace(s[i])) continue;
         if(s[i] != sep) continue;
         if(i > start) f(s.substr(start, i - start));
         start = i + 1;
     }
 
-    while(start < s.size() && std::isspace(s[start])) start++;
     if(start < s.size()) f(s.substr(start));
 }
 
