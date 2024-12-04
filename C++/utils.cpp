@@ -106,21 +106,3 @@ std::wstring string_to_wstring(const std::string& str) {
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
     return converter.from_bytes(str);
 }
-
-std::string_view to_string(uint64_t value, int base) {
-    constexpr std::string_view DIGITS = "0123456789ABCDEFGHIJKLMNOPRSTUVWXYZ";
-    static std::array<char, 65> out;
-
-    if(base < 2 || base > 36) return {};
-
-    usize c = out.size() - 1;
-    out[c] = 0;
-
-    do {
-        size_t rem = value % base;
-        value /= base;
-        out[--c] = DIGITS.at(rem);
-    } while(value > 0);
-
-    return std::string_view{&out[c], out.size() - 1 - c};
-}
