@@ -41,3 +41,31 @@ inline bool ends_with(std::string_view s, std::string_view w) {
     return s.size() >= w.size() &&
            s.compare(s.size() - w.size(), w.size(), w) == 0;
 }
+
+template<typename T>
+static std::string_view to_string(T value, int base, bool sign = false) {
+    constexpr std::string_view DIGITS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    static std::array<char, 66> out;
+
+    if(base < 2 || base > 36) return {};
+
+    bool isneg = false;
+
+    if(sign && value < 0) {
+        isneg = true;
+        value = -value;
+    }
+
+    size_t c = out.size() - 1;
+    out[c] = 0;
+
+    do {
+        T rem = value % base;
+        value /= base;
+        out[--c] = DIGITS.at(rem);
+    } while(value > 0);
+
+    if(isneg) out[--c] = '-';
+
+    return std::string_view{&out[c], out.size() - c - 1};
+}
