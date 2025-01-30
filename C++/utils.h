@@ -21,6 +21,11 @@ Overload(Ts...) -> Overload<Ts...>;
 
 template<typename> constexpr bool always_false_v = false;
 
+template<typename T>
+bool range_overlaps(T s1, T e1, T s2, T e2) {
+    return s1 < e2 && s2 < e1;
+}
+
 template<typename Function>
 void split_each(std::string_view s, char sep, Function f) {
     size_t i = 0, start = 0;
