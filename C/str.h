@@ -5,6 +5,7 @@ extern "C" {
 #endif
 
 #include "strv.h"
+#include <cassert>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -23,22 +24,23 @@ typedef struct _StrHeader {
 // clang-format off
 #define str_header(self) ((_StrHeader*)((self) - offsetof(_StrHeader, ptr)))
 #define str_create_n(n) _str_create_n(NULL, n)
-#define str_lit(s) _str_create_n(s, sizeof(s) - 1)
 #define str_create() str_create(0)
+#define str_lit(s) _str_create_n(s, sizeof(s) - 1)
+#define str_destroy(self) if(self) free(str_header(self))
 #define str_length(self) (str_header(self)->length)
 #define str_capacity(self) (str_header(self)->capacity)
 #define str_empty(self) (!(self) || !str_header(self)->length)
 #define str_equals(self, rhs) str_equals_n(self, rhs, strlen(rhs))
 #define str_equals_lit(self, rhs) str_equals_n(self, rhs, sizeof(rhs) - 1)
-#define str_destroy(self) free((self) ? str_header(self) : NULL)
 #define str_view(self) strv_create_n(self, str_header(self)->length)
-#define str_insert(self, pos, s) self = str_insert_n(self, pos, s, strlen(s))
-#define str_insert_lit(self, pos, s) self = str_insert_n(self, pos, s, sizeof(s) - 1)
+#define str_insert(self, idx, s) self = str_insert_n(self, idx, s, strlen(s))
+#define str_insert_lit(self, idx, s) self = str_insert_n(self, idx, s, sizeof(s) - 1)
 #define str_append(self, s) self = str_insert_n(self, -1, s, strlen(s))
 #define str_append_lit(self, s) self = str_insert_n(self, -1, s, sizeof(s) - 1)
 #define str_append_n(self, s) self = str_insert_n(self, -1, s, strlen(s)
 #define str_removestr(self, s) str_removestr_n(self, s, strlen(s))
 #define str_removestr_lit(self, s) str_removestr_n(self, s, sizeof(s) - 1)
+#define str_resize(self, n) self = _str_resize(self, n)
 #define str_reserve(self, cap) self = _str_ensure_capacity(self, cap)
 #define str_startswith(self, s) str_startswith_n(self, s, strlen(s))
 #define str_startswith_lit(self, s) str_startswith_n(self, s, sizeof(s) - 1)
@@ -57,34 +59,41 @@ inline Str _str_ensure_capacity(Str self, ptrdiff_t newcap) {
     _StrHeader* hdr = str_header(self);
     if(hdr->capacity >= newcap) return self;
 
-    _StrHeader* newhdr = (_StrHeader*)malloc(sizeof(_StrHeader) + newcap + 1);
+    _StrHeader* newhdr =
+        (_StrHeader*)calloc(1, sizeof(_StrHeader) + newcap + 1);
     memcpy(newhdr, hdr, sizeof(_StrHeader) + hdr->capacity);
     newhdr->capacity = newcap;
     free(hdr);
     return newhdr->ptr;
 }
 
-inline ptrdiff_t str_indexof(Str self, const char* s) {
-    const char* pos = strstr(self, s);
-    return pos ? pos - self : -1;
+inline Str _str_resize(Str self, ptrdiff_t newn) {
+    self = _str_ensure_capacity(self, newn);
+    str_header(self)->length = newn;
+    return self;
 }
 
-inline Str str_insert_n(Str self, ptrdiff_t pos, const char* s, ptrdiff_t n) {
+inline ptrdiff_t str_indexof(Str self, const char* s) {
+    const char* p = strstr(self, s);
+    return p ? p - self : -1;
+}
+
+inline Str str_insert_n(Str self, ptrdiff_t idx, const char* s, ptrdiff_t n) {
     ptrdiff_t len = str_header(self)->length;
-    if(pos == -1) pos = len;           // Append mode
-    else if(pos > len) return nullptr; // Position out of range
+    if(idx == -1) idx = len; // Append mode
+    assert(idx <= len);      // Index out of range
 
     ptrdiff_t newlen = len + n;
     self = _str_ensure_capacity(self, newlen);
 
-    // If we are appending (pos == len), skip memmove
-    if(pos < len) {
+    // If we are appending (idx == len), skip memmove
+    if(idx < len) {
         // Shift existing content after the position
         // (+1 to include null terminator)
-        memmove(self + pos + n, self + pos, len - pos + 1);
+        memmove(self + idx + n, self + idx, len - idx + 1);
     }
 
-    memcpy(self + pos, s, n);          // Insert the new string at the position
+    memcpy(self + idx, s, n);          // Insert the new string at the position
     self[newlen] = 0;                  // Ensure null-termination at the new end
     str_header(self)->length = newlen; // Update the length
     return self;
@@ -106,7 +115,7 @@ inline Str str_remove(Str self, ptrdiff_t start, ptrdiff_t n) {
 }
 
 inline Str _str_create_n(const char* s, ptrdiff_t n) {
-    ptrdiff_t cap = n ? (n + 1) << 1 : 1024;
+    ptrdiff_t cap = (n ? (n + 1) : sizeof(ptrdiff_t)) << 1;
     _StrHeader* hdr = (_StrHeader*)malloc(sizeof(_StrHeader) + cap);
     if(!hdr) return nullptr;
 
@@ -118,11 +127,11 @@ inline Str _str_create_n(const char* s, ptrdiff_t n) {
 }
 
 inline ptrdiff_t _str_lastindexof(Str self, const char* s, ptrdiff_t n) {
-    const char* pos = NULL;
+    const char* p = NULL;
 
     for(ptrdiff_t i = str_header(self)->length - n; i >= 0; i--) {
-        pos = strstr(self + i, s);
-        if(pos) return i;
+        p = strstr(self + i, s);
+        if(p) return i;
     }
 
     return -1;
@@ -131,11 +140,14 @@ inline ptrdiff_t _str_lastindexof(Str self, const char* s, ptrdiff_t n) {
 inline Str _str_replace_n(Str self, const char* oldsub, ptrdiff_t oldn,
                           const char* newsub, ptrdiff_t newn) {
     // Find the first occurrence of `old_sub`
-    ptrdiff_t pos = str_indexof(self, oldsub);
+    ptrdiff_t idx = str_indexof(self, oldsub);
     // If the substring is not found, return the string unchanged
-    if(pos == -1) return self;
-    str_remove(self, pos, oldn);          // Remove the oldsub
-    return str_insert(self, pos, newsub); // Insert newsub at the same position
+    if(idx == -1) return self;
+
+    // Remove the oldsub
+    str_remove(self, idx, oldn);
+    // Insert newsub at the same position
+    return str_insert_n(self, idx, newsub, newn);
 }
 
 inline bool str_startswith_n(const Str self, const char* prefix, ptrdiff_t n) {
@@ -172,12 +184,12 @@ inline StrV str_sub(const Str self, ptrdiff_t start, ptrdiff_t end) {
 inline ptrdiff_t str_removestr_n(Str self, const char* s, ptrdiff_t n) {
     if(!s) return -1;
     ptrdiff_t len = str_header(self)->length;
-    char* pos;
+    char* p;
     int nremoved = 0;
 
     // Continue removing the substring as long as it is found
-    while((pos = strstr(self, s)) != NULL) {
-        memmove(pos, pos + n, len - (pos - self) - n + 1);
+    while((p = strstr(self, s)) != NULL) {
+        memmove(p, p + n, len - (p - self) - n + 1);
         str_header(self)->length -= n;
         nremoved++;
         len = str_header(self)->length;
