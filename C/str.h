@@ -24,8 +24,13 @@ typedef struct _StrHeader {
 // clang-format off
 #define str_header(self) ((_StrHeader*)((self) - offsetof(_StrHeader, ptr)))
 #define str_create_n(n) _str_create_n(NULL, n)
+#define str_create_from_strv(strv) _str_create_n((strv).ptr, (strv).length)
 #define str_create() str_create(0)
 #define str_lit(s) _str_create_n(s, sizeof(s) - 1)
+#define str_begin(self) (self)
+#define str_end(self) ((self) + str_header(self)->length - 1)
+#define str_first(self) ((self)[0])
+#define str_last(self) ((self)[str_header(self)->length - 1])
 #define str_destroy(self) if(self) free(str_header(self))
 #define str_length(self) (str_header(self)->length)
 #define str_capacity(self) (str_header(self)->capacity)
@@ -41,17 +46,30 @@ typedef struct _StrHeader {
 #define str_removestr(self, s) str_removestr_n(self, s, strlen(s))
 #define str_removestr_lit(self, s) str_removestr_n(self, s, sizeof(s) - 1)
 #define str_resize(self, n) self = _str_resize(self, n)
-#define str_reserve(self, cap) self = _str_ensure_capacity(self, cap)
+#define str_reserve(self, cap) self = city(self, cap)
 #define str_startswith(self, s) str_startswith_n(self, s, strlen(s))
 #define str_startswith_lit(self, s) str_startswith_n(self, s, sizeof(s) - 1)
 #define str_endswith(self, s) str_endswith_n(self, s, strlen(s))
 #define str_endswith_lit(self, s) str_endswith_n(self, s, sizeof(s) - 1)
-#define str_lastindexof(self, s) _str_lastindexof(self, s, strlen(s))
-#define str_lastindexof_lit(self, s) _str_lastindexof(self, s, sizeof(s) - 1)
+#define str_index(self, s) _cstr_index_n((self), str_header(self)->length, s, strlen(s))
+#define str_index_lit(self, s) _cstr_index_n((self), str_header(self)->length, s, sizeof(s) - 1)
+#define str_lastindex(self, s) _cstr_lastindex_n((self), str_header(self)->length, s, strlen(s))
+#define str_lastindex_lit(self, s) _cstr_lastindex_n((self), str_header(self)->length, s, sizeof(s) - 1)
 #define str_replace(self, oldsub, newsub) self = _str_replace_n(self, oldsub, strlen(oldsub), newsub, strlen(newsub))
 #define str_replace_lit(self, oldsub, newsub) self = _str_replace_n(self, oldsub, sizeof(oldsub) - 1, newsub, sizeof(newsub) - 1)
 #define str_replace_n(self, oldsub, oldn, newsub, newn) self = _str_replace_n(self, oldsub, oldn, newsub, newn)
-#define str_contains(self, s) (str_indexof(self, s) != -1)
+#define str_contains(self, s) (str_index(self, s) != -1)
+
+#define str_pop_n(self, n) do { \
+    _StrHeader* hdr = str_header(self); \
+    if(hdr->length > (n)) hdr->length -= (n); \
+    else hdr->length = 0; \
+} while(0)
+
+#define str_pop(self) str_pop_n(self, 1)
+
+#define str_foreach(item, self) \
+    for(char* item = str_begin(self); item != str_end(self); item++) // NOLINT
 // clang-format on
 
 // NOLINTBEGIN
@@ -71,11 +89,6 @@ inline Str _str_resize(Str self, ptrdiff_t newn) {
     self = _str_ensure_capacity(self, newn);
     str_header(self)->length = newn;
     return self;
-}
-
-inline ptrdiff_t str_indexof(Str self, const char* s) {
-    const char* p = strstr(self, s);
-    return p ? p - self : -1;
 }
 
 inline Str str_insert_n(Str self, ptrdiff_t idx, const char* s, ptrdiff_t n) {
@@ -126,21 +139,10 @@ inline Str _str_create_n(const char* s, ptrdiff_t n) {
     return hdr->ptr;
 }
 
-inline ptrdiff_t _str_lastindexof(Str self, const char* s, ptrdiff_t n) {
-    const char* p = NULL;
-
-    for(ptrdiff_t i = str_header(self)->length - n; i >= 0; i--) {
-        p = strstr(self + i, s);
-        if(p) return i;
-    }
-
-    return -1;
-}
-
 inline Str _str_replace_n(Str self, const char* oldsub, ptrdiff_t oldn,
                           const char* newsub, ptrdiff_t newn) {
     // Find the first occurrence of `old_sub`
-    ptrdiff_t idx = str_indexof(self, oldsub);
+    ptrdiff_t idx = str_index(self, oldsub);
     // If the substring is not found, return the string unchanged
     if(idx == -1) return self;
 
