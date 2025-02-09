@@ -62,15 +62,15 @@ typedef struct StrHeader {
 #define str_replace_n(self, oldsub, oldn, newsub, newn) self = _str_replace_n(self, oldsub, oldn, newsub, newn)
 #define str_contains(self, s) (str_index(self, s) != str_npos)
 
-#define str_pop_n(self, n) do { \
-    StrHeader* hdr = str_header(self); \
+#define str_pop_n(self, n) do {               \
+    StrHeader* hdr = str_header(self);        \
     if(hdr->length > (n)) hdr->length -= (n); \
-    else hdr->length = 0; \
+    else hdr->length = 0;                     \
 } while(0)
 
 #define str_pop(self) str_pop_n(self, 1)
 
-#define str_foreach(item, self) \
+#define str_foreach(item, self)               \
     for(char* item = str_begin(self); item != str_end(self); item++) // NOLINT
 // clang-format on
 

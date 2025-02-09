@@ -39,25 +39,25 @@ typedef struct VectHeader {
 #define vect_empty(self) (!(self) || !vect_header(self)->length)
 #define vect_setitemdel(self, itemdelfn) vect_header(self)->itemdel = itemdelfn
 
-#define vect_ins(T, self, idx, ...) do{ \
-    self = (Vect(T))_vect_ins(self, idx); \
-    self[idx] = __VA_ARGS__; \
+#define vect_ins(T, self, idx, ...) do{             \
+    self = (Vect(T))_vect_ins(self, idx);           \
+    self[idx] = __VA_ARGS__;                        \
 } while(0)
 
-#define vect_add(T, self, ...) do{ \
+#define vect_add(T, self, ...) do{                  \
     self = (Vect(T))_vect_ins(self, (uintptr_t)-1); \
-    self[vect_length(self) - 1] = __VA_ARGS__; \
+    self[vect_length(self) - 1] = __VA_ARGS__;      \
 } while(0)
 
-#define vect_pop_n(self, n) do { \
-    VectHeader* hdr = vect_header(self); \
-    if(hdr->length > (n)) hdr->length -= (n); \
+#define vect_pop_n(self, n) do {                    \
+    VectHeader* hdr = vect_header(self);            \
+    if(hdr->length > (n)) hdr->length -= (n);       \
     else hdr->length = 0; \
 } while(0)
 
 #define vect_pop(self) vect_pop_n(self, 1)
 
-#define vect_foreach(T, item, self) \
+#define vect_foreach(T, item, self)                 \
     for(T* item = vect_begin(self); item != vect_end(self); item++) // NOLINT
 
 // clang-format on

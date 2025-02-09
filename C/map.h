@@ -107,9 +107,9 @@ typedef struct MapBucket { map_bucket_fields; } MapBucket;
     _MapItemType(KV, K, V);                                                     \
     inline bool _map_equals__##KV(const void* key1, const void* key2,           \
                                   uintptr_t) {                                  \
-        return !strcmp(*((const KV##Key*)key1), *((const KV##Key*)key2));     \
+        return !strcmp(*((const KV##Key*)key1), *((const KV##Key*)key2));       \
     }                                                                           \
-    inline uintptr_t _map_hash__##KV(const void* k, uintptr_t) {              \
+    inline uintptr_t _map_hash__##KV(const void* k, uintptr_t) {                \
         const char* str = *((const char**)k);                                   \
         return _map_fnv1a(str, strlen(str));                                    \
     }
