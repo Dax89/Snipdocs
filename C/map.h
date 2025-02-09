@@ -25,7 +25,7 @@ enum {
 #define map_bucket_fields                                                      \
     uintptr_t hash;                                                            \
     ptrdiff_t state
-
+;
 // clang-format off
 typedef struct MapBucket { map_bucket_fields; } MapBucket;
 #define Map(KV) KV*
@@ -40,18 +40,16 @@ typedef struct MapBucket { map_bucket_fields; } MapBucket;
 #define map_capacity(self) (map_header(self)->capacity)
 #define map_loadfactor(self) ((float)(map_header(self)->length + map_header(self)->tombs) / (float)map_header(self)->capacity)
 #define map_empty(self) (!(self) || !map_header(self)->length)
-#define map_destroy(self) if(self) free(map_header(self))
 #define map_getbucket(KV, self, k) _map_getbucket__##KV(self, k)
 #define map_get(KV, self, k) _map_get__##KV(self, k)
-#define map_set(KV, self, k, v) self = _map_set__##KV(self, k, v)
+#define map_set(KV, self, k, ...) self = _map_set__##KV(self, k, __VA_ARGS__)
 #define map_del(KV, self, k) self = _map_del__##KV(self, k)
-#define map_clear(KV, self) _map_clear(self, sizeof(KV))
 #define map_contains(KV, self, k) (map_get(KV, self, K) != NULL)
 #define map_rehash(KV, self, n) self = _map_rehash__##KV(self, n)
 #define map_reserve(KV, self, n) self = _map_rehash__##KV(self, ceil(n / map_max_loadfactor))
-#define map_sethash(KV, hashfn) map_header(self)->hash = hashfn
-#define map_setequals(KV, equalsfn) map_header(self)->equals = equalsfn
-#define map_setitemdel(KV, itemdelfn) map_header(self)->itemdel = itemdelfn
+#define map_sethash(self, hashfn) map_header(self)->hash = hashfn
+#define map_setequals(self, equalsfn) map_header(self)->equals = equalsfn
+#define map_setitemdel(self, itemdelfn) map_header(self)->itemdel = itemdelfn
 
 #define map_foreach(KV, item, self)                                             \
     for(Map(KV) item = map_begin(self); item != map_end(self); ++item)          \
@@ -61,19 +59,19 @@ typedef struct MapBucket { map_bucket_fields; } MapBucket;
     typedef K KV##Key;                                                          \
     typedef V KV##Value;                                                        \
     typedef struct KV { map_bucket_fields; K key; V value; } KV;                \
-    inline Map(KV) _map_rehash__##KV(Map(KV) self, uintptr_t n) {               \
-        return (Map(KV))_map_rehash(self, sizeof(KV), sizeof(K), n);            \
+    inline Map(KV) _map_rehash__##KV(Map(KV) self, uintptr_t newcap) {          \
+        return (Map(KV))_map_rehash(self, sizeof(K), newcap);                   \
     }                                                                           \
     inline const Map(KV) _map_getbucket__##KV(const Map(KV) self, K k) {        \
         uintptr_t idx =                                                         \
-        _map_findbucket(self, &k, sizeof(K), sizeof(KV), false);                \
+        _map_findbucket(self, &k, sizeof(K), false);                            \
         if(self[idx].state == MS_FULL) return &self[idx];                       \
         return NULL;                                                            \
     }                                                                           \
     inline Map(KV) _map_set__##KV(Map(KV) self, K k, V v) {                     \
-        self = (KV*)_map_check_rehash(self, sizeof(KV), sizeof(K));             \
+        self = (KV*)_map_check_rehash(self, sizeof(K));                         \
         uintptr_t idx =                                                         \
-            _map_findbucket(self, &k, sizeof(K), sizeof(KV), true);             \
+            _map_findbucket(self, &k, sizeof(K), true);                         \
         self[idx].key = k;                                                      \
         self[idx].value = v;                                                    \
         return self;                                                            \
@@ -85,10 +83,10 @@ typedef struct MapBucket { map_bucket_fields; } MapBucket;
     }                                                                           \
     inline bool _map_del__##KV(Map(KV) self, K k) {                             \
         uintptr_t idx =                                                         \
-            _map_findbucket(self, &k, sizeof(K), sizeof(KV), false);            \
+            _map_findbucket(self, &k, sizeof(K), false);                        \
         if(self[idx].state != MS_FULL) return false;                            \
         MapHeader* hdr = map_header(self);                                      \
-        if(hdr->itemdel) hdr->itemdel((MapBucket*)&self[idx]);          \
+        if(hdr->itemdel) hdr->itemdel((MapBucket*)&self[idx]);                  \
         self[idx].state = MS_TOMB;                                              \
         hdr->length--;                                                          \
         hdr->tombs++;                                                           \
@@ -99,7 +97,7 @@ typedef struct MapBucket { map_bucket_fields; } MapBucket;
     _MapItemType(KV, K, V);                                                     \
     inline bool _map_equals__##KV(const void* key1, const void* key2,           \
                                   uintptr_t) {                                  \
-        return (*(const KV##Key*)key1) == (*(const KV##Key*)key2);              \
+        return !memcmp(key1, key2, sizeof(KV##Key));                            \
     }                                                                           \
     inline uintptr_t _map_hash__##KV(const void* k, uintptr_t) {                \
         return _map_fnv1a(k, sizeof(K));                                        \
@@ -109,9 +107,9 @@ typedef struct MapBucket { map_bucket_fields; } MapBucket;
     _MapItemType(KV, K, V);                                                     \
     inline bool _map_equals__##KV(const void* key1, const void* key2,           \
                                   uintptr_t) {                                  \
-        return !strcmp(*((const KV##Key**)key1), *((const KV##Key**)key2));     \
+        return !strcmp(*((const KV##Key*)key1), *((const KV##Key*)key2));     \
     }                                                                           \
-    inline uintptr_t _map_hash__##name(const void* k, uintptr_t) {              \
+    inline uintptr_t _map_hash__##KV(const void* k, uintptr_t) {              \
         const char* str = *((const char**)k);                                   \
         return _map_fnv1a(str, strlen(str));                                    \
     }
@@ -128,6 +126,7 @@ typedef struct MapHeader {
     uintptr_t length;
     uintptr_t tombs;
     uintptr_t capacity;
+    uintptr_t bucketsize;
     MapHash hash;
     MapProbe probe;
     MapEquals equals;
@@ -145,7 +144,36 @@ typedef struct MapHeader {
     #error "Unknown platform"
 #endif
 
-static uintptr_t _map_fnv1a(const void* data, uintptr_t len) {
+inline void map_clear(Map(void) self) {
+    MapHeader* hdr = map_header(self);
+
+    for(char* it = (char*)self;
+        it != (char*)self + (hdr->capacity * hdr->bucketsize) &&
+        (hdr->length || hdr->tombs);
+        it += hdr->bucketsize) {
+        MapBucket* b = (MapBucket*)it;
+
+        if(b->state == MS_FULL) {
+            if(hdr->itemdel) hdr->itemdel(b);
+            --hdr->length;
+        }
+        else if(b->state == MS_TOMB) --hdr->tombs;
+
+        b->state = MS_NULL;
+    }
+
+    assert(hdr->length == 0 && "Length is not 0 in map_clear()");
+    assert(hdr->tombs == 0 && "Tombs is not 0 in map_clear()");
+}
+
+inline void map_destroy(Map(void) self) {
+    if(self) {
+        if(map_header(self)->itemdel) map_clear(self);
+        free(map_header(self));
+    }
+}
+
+inline uintptr_t _map_fnv1a(const void* data, uintptr_t len) {
     const uint8_t* p = (const uint8_t*)(data);
     uintptr_t hash = map_fnv1a_prime1;
 
@@ -158,20 +186,22 @@ static uintptr_t _map_fnv1a(const void* data, uintptr_t len) {
 }
 
 inline uintptr_t _map_findbucket(const Map(void) self, const void* key,
-                                 uintptr_t keysize, uintptr_t bucketsize,
-                                 bool w) {
+                                 uintptr_t keysize, bool w) {
     MapHeader* hdr = map_header(self);
     uintptr_t h = hdr->hash(key, keysize), idx = h % hdr->capacity,
               tombidx = (uintptr_t)-1;
 
     for(MapBucket* citem = NULL;; idx = hdr->probe(hdr, idx)) {
-        citem = (MapBucket*)((char*)self + (idx * bucketsize));
+        citem = (MapBucket*)((char*)self + (idx * hdr->bucketsize));
         const void* ckey = citem + 1;
 
         // Case 1: Found a valid item that matches
         if(citem->state == MS_FULL && h == citem->hash &&
-           hdr->equals(key, ckey, keysize))
+           hdr->equals(key, ckey, keysize)) {
+            // Write Mode: we are replacing data, destroy old one
+            if(w && hdr->itemdel) hdr->itemdel(citem);
             return idx;
+        }
 
         // Case 2: Writing on map
         if(w) {
@@ -200,7 +230,7 @@ inline uintptr_t _map_findbucket(const Map(void) self, const void* key,
 }
 
 inline uintptr_t _map_defaultprobe(const MapHeader* self, uintptr_t idx) {
-    return (uintptr_t)((idx + 1) % map_header(self)->capacity);
+    return (uintptr_t)((idx + 1) % self->capacity);
 }
 
 inline Map(void) _map_create_n(uintptr_t bucketsize, uintptr_t cap,
@@ -213,6 +243,7 @@ inline Map(void) _map_create_n(uintptr_t bucketsize, uintptr_t cap,
 
     hdr->length = 0;
     hdr->capacity = cap;
+    hdr->bucketsize = bucketsize;
     hdr->hash = hashfn;
     hdr->probe = _map_defaultprobe;
     hdr->equals = equalsfn;
@@ -220,33 +251,36 @@ inline Map(void) _map_create_n(uintptr_t bucketsize, uintptr_t cap,
     return hdr->buckets;
 }
 
-inline Map(void) _map_rehash(Map(void) self, uintptr_t bucketsize,
-                             uintptr_t keysize, uintptr_t newcap) {
+inline Map(void)
+    _map_rehash(Map(void) self, uintptr_t keysize, uintptr_t newcap) {
     MapHeader* hdr = map_header(self);
     if(!newcap) newcap = hdr->capacity; // Just rehash
     else if(hdr->capacity >= newcap) return self;
 
     MapHeader* newhdr =
-        (MapHeader*)calloc(1, sizeof(MapHeader) + (bucketsize * newcap));
+        (MapHeader*)calloc(1, sizeof(MapHeader) + (hdr->bucketsize * newcap));
 
-    *newhdr = *hdr;
-    newhdr->capacity = newcap;
-    newhdr->tombs = 0;
     newhdr->length = 0;
-    newhdr->buckets[0] = 0;
+    newhdr->tombs = 0;
+    newhdr->capacity = newcap;
+    newhdr->bucketsize = hdr->bucketsize;
+    newhdr->hash = hdr->hash;
+    newhdr->probe = hdr->probe;
+    newhdr->equals = hdr->equals;
+    newhdr->itemdel = hdr->itemdel;
 
     Map(void) newself = &newhdr->buckets;
     const MapBucket* cbucket = NULL;
 
     for(uintptr_t len = hdr->length, i = 0; len > 0; i++) {
-        cbucket = (const MapBucket*)((char*)self + (i * bucketsize));
+        cbucket = (const MapBucket*)((char*)self + (i * hdr->bucketsize));
         if(cbucket->state != MS_FULL) continue;
         const void* ckey = cbucket + 1;
 
-        uintptr_t idx =
-            _map_findbucket(newself, ckey, keysize, bucketsize, true);
-        MapBucket* bucket = (MapBucket*)((char*)newself + (idx * bucketsize));
-        memcpy(bucket, cbucket, bucketsize);
+        uintptr_t idx = _map_findbucket(newself, ckey, keysize, true);
+        MapBucket* bucket =
+            (MapBucket*)((char*)newself + (idx * hdr->bucketsize));
+        memcpy(bucket, cbucket, hdr->bucketsize);
         --len;
     }
 
@@ -254,33 +288,9 @@ inline Map(void) _map_rehash(Map(void) self, uintptr_t bucketsize,
     return newself;
 }
 
-void _map_clear(Map(void) self, uintptr_t bucketsize) {
-    MapHeader* hdr = map_header(self);
-
-    for(char* it = (char*)self;
-        it != (char*)self + (hdr->capacity * bucketsize) &&
-        (hdr->length || hdr->tombs);
-        it += bucketsize) {
-        MapBucket* b = (MapBucket*)it;
-
-        if(b->state == MS_FULL) {
-            if(hdr->itemdel) hdr->itemdel(b);
-            --hdr->length;
-        }
-        else if(b->state == MS_TOMB) --hdr->tombs;
-
-        b->state = MS_NULL;
-    }
-
-    assert(hdr->length == 0 && "Length is not 0 in _map_clear()");
-    assert(hdr->tombs == 0 && "Tombs is not 0 in _map_clear()");
-}
-
-inline Map(void)
-    _map_check_rehash(Map(void) self, uintptr_t bucketsize, uintptr_t n) {
+inline Map(void) _map_check_rehash(Map(void) self, uintptr_t n) {
     if(map_loadfactor(self) >= map_max_loadfactor) {
-        return _map_rehash(self, bucketsize, n,
-                           map_header(self)->capacity << 1);
+        return _map_rehash(self, n, map_header(self)->capacity << 1);
     }
 
     return self;
