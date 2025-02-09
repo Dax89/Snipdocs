@@ -5,17 +5,17 @@ extern "C" {
 #endif
 
 #include <stdbool.h>
-#include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 
 // NOLINTBEGIN
 typedef struct StrV {
     const char* ptr;
-    ptrdiff_t length;
+    uintptr_t length;
 } StrV;
-// NOLINTEND
 
 // clang-format off
+#define strv_npos (uintptr_t)-1
 #define strv_lit(s) strv_create_n(s, sizeof(s) - 1)
 #define strv_create(s) strv_create_n(s, strlen(s))
 #define strv_begin(self) ((self)->ptr)
@@ -36,7 +36,7 @@ typedef struct StrV {
 #define strv_index_lit(self, s) _cstr_index((self).ptr, (self).length, s, sizeof(s) - 1)
 #define strv_lastindex(self, s) _cstr_lastindex_n((self).ptr, (self).length, s, strlen(s))
 #define strv_lastindex_lit(self, s) _cstr_lastindex((self).ptr, (self).length, s, sizeof(s) - 1)
-#define strv_contains(self, s) (strv_index(self, s) != -1)
+#define strv_contains(self, s) (strv_index(self, s) != strv_npos)
 #define strv_split(self, sep) _strv_split_n(self, sep, strlen(sep))
 #define strv_split_lit(self, sep) _strv_split_n(self, sep, sizeof(sep) - 1)
 
@@ -69,15 +69,13 @@ typedef struct StrV {
 
 // clang-format on
 
-// NOLINTBEGIN
+inline uintptr_t _cstr_index_n(const char* s1, uintptr_t n1, const char* s2,
+                               uintptr_t n2) {
+    if(!s1 || !s2 || n2 > n1) return strv_npos;
 
-inline ptrdiff_t _cstr_index_n(const char* s1, ptrdiff_t n1, const char* s2,
-                               ptrdiff_t n2) {
-    if(!s1 || !s2 || n2 > n1) return -1;
-
-    for(ptrdiff_t i = 0; i <= n1 - n2; ++i) {
+    for(uintptr_t i = 0; i <= n1 - n2; ++i) {
         bool found = true;
-        for(ptrdiff_t j = 0; j < n2; ++j) {
+        for(uintptr_t j = 0; j < n2; ++j) {
             if(s1[i + j] == s2[j]) continue;
             found = false;
             break;
@@ -85,16 +83,16 @@ inline ptrdiff_t _cstr_index_n(const char* s1, ptrdiff_t n1, const char* s2,
         if(found) return i;
     }
 
-    return -1;
+    return strv_npos;
 }
 
-inline ptrdiff_t _cstr_lastindex_n(const char* s1, ptrdiff_t n1, const char* s2,
-                                   ptrdiff_t n2) {
-    if(!s1 || !s2 || n2 > n1) return -1;
+inline uintptr_t _cstr_lastindex_n(const char* s1, uintptr_t n1, const char* s2,
+                                   uintptr_t n2) {
+    if(!s1 || !s2 || n2 > n1) return strv_npos;
 
-    for(ptrdiff_t i = n1 - n2; i >= 0; --i) {
+    for(uintptr_t i = n1 - n2; i-- > 0;) {
         bool found = true;
-        for(int j = 0; j < n2; ++j) {
+        for(uintptr_t j = 0; j < n2; ++j) {
             if(s1[i + j] == s2[j]) continue;
             found = false;
             break;
@@ -102,26 +100,26 @@ inline ptrdiff_t _cstr_lastindex_n(const char* s1, ptrdiff_t n1, const char* s2,
         if(found) return i;
     }
 
-    return -1;
+    return strv_npos;
 }
 
-inline StrV strv_create_n(const char* s, ptrdiff_t n) {
+inline StrV strv_create_n(const char* s, uintptr_t n) {
     StrV self;
     self.ptr = s;
     self.length = n;
     return self;
 }
 
-inline bool strv_equals_n(StrV self, const char* rhs, ptrdiff_t n) {
+inline bool strv_equals_n(StrV self, const char* rhs, uintptr_t n) {
     if(self.length != n) return false;
     return !memcmp(self.ptr, rhs, self.length);
 }
 
-inline StrV _strv_split_n(StrV* self, const char* sep, ptrdiff_t n) {
+inline StrV _strv_split_n(StrV* self, const char* sep, uintptr_t n) {
     if(self->ptr) {
-        ptrdiff_t idx = _cstr_index_n(self->ptr, self->length, sep, n);
+        uintptr_t idx = _cstr_index_n(self->ptr, self->length, sep, n);
 
-        if(idx != -1) {
+        if(idx != strv_npos) {
             StrV sp = strv_create_n(self->ptr, idx);
             self->ptr += idx + n;
             self->length -= idx + n;
@@ -132,23 +130,21 @@ inline StrV _strv_split_n(StrV* self, const char* sep, ptrdiff_t n) {
     return {NULL, 0};
 }
 
-inline bool strv_startswith_n(StrV self, const char* prefix, ptrdiff_t n) {
+inline bool strv_startswith_n(StrV self, const char* prefix, uintptr_t n) {
     if(self.length < n) return false;
     return !memcmp(self.ptr, prefix, n);
 }
 
-inline bool strv_endswith_n(StrV self, const char* suffix, ptrdiff_t n) {
+inline bool strv_endswith_n(StrV self, const char* suffix, uintptr_t n) {
     if(self.length < n) return false;
-    ptrdiff_t off = self.length - n;
+    uintptr_t off = self.length - n;
     return !memcmp(self.ptr + off, suffix, n);
 }
 
-inline StrV strv_sub(StrV self, ptrdiff_t start, ptrdiff_t end) {
+inline StrV strv_sub(StrV self, uintptr_t start, uintptr_t end) {
     StrV res = {NULL, 0};
-    if(start < 0) start = self.length + start;
-    if(end <= 0) end = self.length + end;
 
-    if(strv_valid(self) && start >= 0 && start < end && end < self.length) {
+    if(strv_valid(self) && start < end && end < self.length) {
         res.ptr = self.ptr + start;
         res.length = end - start;
     }
