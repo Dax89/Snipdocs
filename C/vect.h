@@ -34,12 +34,9 @@ typedef struct VectHeader {
 #define vect_last(self) ((self)[vect_header(self)->length - 1])
 #define vect_resize(T, self, n) self = (Vect(T))_vect_resize(self, n))
 #define vect_reserve(T, self, cap) self = (Vect(T))_vect_ensure_capacity(self, cap)
-#define vect_clear(self) _vect_clear(self)
 #define vect_length(self) (vect_header(self)->length)
 #define vect_capacity(self) (vect_header(self)->capacity)
 #define vect_empty(self) (!(self) || !vect_header(self)->length)
-#define vect_destroy(self) _vect_destroy(self)
-#define vect_del(self, idx) _vect_del(self, idx)
 #define vect_setitemdel(self, itemdelfn) vect_header(self)->itemdel = itemdelfn
 
 #define vect_ins(T, self, idx, ...) do{ \
@@ -70,14 +67,13 @@ inline Vect(void) _vect_create_n(uintptr_t itemsize, uintptr_t n) {
     VectHeader* hdr =
         (VectHeader*)calloc(1, sizeof(VectHeader) + (itemsize * cap));
     if(!hdr) return nullptr;
-
     hdr->length = n;
     hdr->capacity = cap;
     hdr->itemsize = itemsize;
     return hdr->items;
 }
 
-inline void _vect_clear(Vect(void) self) {
+inline void vect_clear(Vect(void) self) {
     VectHeader* hdr = vect_header(self);
 
     if(hdr->itemdel) {
@@ -91,9 +87,11 @@ inline void _vect_clear(Vect(void) self) {
     vect_header(self)->length = 0;
 }
 
-inline void _vect_destroy(Vect(void) self) {
-    _vect_clear(self);
-    free(vect_header(self));
+inline void vect_destroy(Vect(void) self) {
+    if(self) {
+        vect_clear(self);
+        free(vect_header(self));
+    }
 }
 
 inline Vect(void) _vect_ensure_capacity(Vect(void) self, uintptr_t newcap) {
@@ -140,7 +138,7 @@ inline Vect(void) _vect_ins(Vect(void) self, uintptr_t idx) {
     return self;
 }
 
-inline void _vect_del(Vect(void) self, uintptr_t idx) {
+inline void vect_del(Vect(void) self, uintptr_t idx) {
     VectHeader* hdr = vect_header(self);
     uintptr_t len = hdr->length;
     assert(idx < len); // Index is out of range
