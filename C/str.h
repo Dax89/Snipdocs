@@ -26,6 +26,7 @@ typedef struct StrHeader {
 #define str_header(self) ((StrHeader*)((self) - offsetof(StrHeader, str)))
 #define str_create_n(n) _str_create_n(NULL, n)
 #define str_create_from_strv(strv) _str_create_n((strv).str, (strv).length)
+#define str_create_from(s) _str_create_n(s, strlen(s))
 #define str_create() str_create(0)
 #define str_lit(s) _str_create_n(s, sizeof(s) - 1)
 #define str_begin(self) (self)
