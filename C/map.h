@@ -51,7 +51,7 @@ typedef struct MapBucket { map_bucket_fields; } MapBucket;
 #define map_reserve(KV, self, n) self = _map_rehash__##KV(self, ceil(n / map_max_loadfactor))
 #define map_sethash(KV, hashfn) map_header(self)->hash = hashfn
 #define map_setequals(KV, equalsfn) map_header(self)->equals = equalsfn
-#define map_itemdestroy(KV, itemdestroyfn) map_header(self)->itemdestroy = itemdestroyfn
+#define map_setitemdel(KV, itemdelfn) map_header(self)->itemdel = itemdelfn
 
 #define map_foreach(KV, item, self)                                             \
     for(Map(KV) item = map_begin(self); item != map_end(self); ++item)          \
@@ -88,7 +88,7 @@ typedef struct MapBucket { map_bucket_fields; } MapBucket;
             _map_findbucket(self, &k, sizeof(K), sizeof(KV), false);            \
         if(self[idx].state != MS_FULL) return false;                            \
         MapHeader* hdr = map_header(self);                                      \
-        if(hdr->itemdestroy) hdr->itemdestroy((MapBucket*)&self[idx]);          \
+        if(hdr->itemdel) hdr->itemdel((MapBucket*)&self[idx]);          \
         self[idx].state = MS_TOMB;                                              \
         hdr->length--;                                                          \
         hdr->tombs++;                                                           \
@@ -121,7 +121,7 @@ struct MapHeader;
 typedef uintptr_t (*MapHash)(const void*, uintptr_t);
 typedef uintptr_t (*MapProbe)(const MapHeader*, uintptr_t);
 typedef bool (*MapEquals)(const void*, const void*, uintptr_t);
-typedef void (*MapItemDestroy)(MapBucket*);
+typedef void (*MapItemDel)(MapBucket*);
 // clang-format on
 
 typedef struct MapHeader {
@@ -131,7 +131,7 @@ typedef struct MapHeader {
     MapHash hash;
     MapProbe probe;
     MapEquals equals;
-    MapItemDestroy itemdestroy;
+    MapItemDel itemdel;
     char buckets[1];
 } MapHeader;
 
@@ -216,7 +216,7 @@ inline Map(void) _map_create_n(uintptr_t bucketsize, uintptr_t cap,
     hdr->hash = hashfn;
     hdr->probe = _map_defaultprobe;
     hdr->equals = equalsfn;
-    hdr->itemdestroy = NULL;
+    hdr->itemdel = NULL;
     return hdr->buckets;
 }
 
@@ -264,7 +264,7 @@ void _map_clear(Map(void) self, uintptr_t bucketsize) {
         MapBucket* b = (MapBucket*)it;
 
         if(b->state == MS_FULL) {
-            if(hdr->itemdestroy) hdr->itemdestroy(b);
+            if(hdr->itemdel) hdr->itemdel(b);
             --hdr->length;
         }
         else if(b->state == MS_TOMB) --hdr->tombs;
