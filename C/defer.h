@@ -1,11 +1,9 @@
-#pragma once
-
-#define _xyz_cc(a, b) a##b
-#define _xyz_c(a, b) _xyz_cc(a, b)
-#define _xyz_var(n) _xyz_c(n, __LINE__)
+#define _sd_gencc(a, b) a##b
+#define _sd_genc(a, b) _sd_gencc(a, b)
+#define _sd_genvar(n) _sd_genc(n, __LINE__)
 
 #define scope(start, end)                                                      \
-    for(int _xyz_var(i) = (start, 0); !_xyz_var(i); _xyz_var(i)++, end)
+    for(int _sd_genvar(i) = (start, 0); !_sd_genvar(i); _sd_genvar(i)++, end)
 
 #define defer(...)                                                             \
-    for(int _xyz_var(i) = 0; !_xyz_var(i); _xyz_var(i)++, __VA_ARGS__)
+    for(int _sd_genvar(i) = 0; !_sd_genvar(i); _sd_genvar(i)++, __VA_ARGS__)
