@@ -1,3 +1,11 @@
+//  ___ _____ ___
+// / __|_   _| _ \  String implementation for C
+// \__ \ | | |   /  Version: 1.0
+// |___/ |_| |_|_\  https://github.com/Dax89
+//
+// SPDX-FileCopyrightText: 2025 Antonio Davide Trogu <contact@antoniodavide.dev>
+// SPDX-License-Identifier: MIT
+
 #pragma once
 
 #if defined(__cplusplus)
@@ -9,11 +17,17 @@ extern "C" {
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 // NOLINTBEGIN
+typedef void* (*StrAlloc)(void* ctx, void* ptr, uintptr_t osize,
+                          uintptr_t nsize);
+
 typedef struct StrHeader {
+    void* ctx;
+    StrAlloc alloc;
     uintptr_t length;
     uintptr_t capacity;
     char str[1];
@@ -24,16 +38,20 @@ typedef struct StrHeader {
 // clang-format off
 #define str_npos (uintptr_t)-1
 #define str_header(self) ((StrHeader*)((self) - offsetof(StrHeader, str)))
-#define str_create_n(n) _str_create_n(NULL, n)
-#define str_create_from_strv(strv) _str_create_n((strv).str, (strv).length)
-#define str_create_from(s) _str_create_n(s, strlen(s))
-#define str_create() str_create(0)
-#define str_lit(s) _str_create_n(s, sizeof(s) - 1)
+#define str_alloc(ctx, allocfn) _str_alloc_n(ctx, allocfn, 0)
+#define str_alloc_n(ctx, allocfn, n) _str_alloc_n(ctx, allocfn, NULL, n)
+#define str_alloc_lit(ctx, allocfn, s) _str_alloc_n(ctx, allocfn, s, sizeof(s) - 1)
+#define str_alloc_from(ctx, allocfn, s) _str_alloc_n(ctx, allocfn, s, strlen(s))
+#define str_alloc_from_strv(ctx, allocfn, strv) _str_alloc_n(ctx, allocfn, (strv).str, (strv).length)
+#define str_create() str_alloc(NULL, _str_defaultalloc)
+#define str_create_n(n) str_alloc_n(NULL, _str_defaultalloc, n)
+#define str_create_lit(s) str_alloc_lit(NULL, _str_defaultalloc, s)
+#define str_create_from(s) str_alloc_from(NULL, _str_defaultalloc, s)
+#define str_create_from_strv(strv) str_alloc_from_strv(NULL, _str_defaultalloc, strv)
 #define str_begin(self) (self)
 #define str_end(self) ((self) + str_header(self)->length - 1)
 #define str_first(self) ((self)[0])
 #define str_last(self) ((self)[str_header(self)->length - 1])
-#define str_destroy(self) if(self) free(str_header(self))
 #define str_length(self) (str_header(self)->length)
 #define str_capacity(self) (str_header(self)->capacity)
 #define str_empty(self) (!(self) || !str_header(self)->length)
@@ -48,7 +66,7 @@ typedef struct StrHeader {
 #define str_delstr(self, s) str_removestr_n(self, s, strlen(s))
 #define str_delstr_lit(self, s) str_removestr_n(self, s, sizeof(s) - 1)
 #define str_resize(self, n) self = _str_resize(self, n)
-#define str_reserve(self, cap) self = city(self, cap)
+#define str_reserve(self, cap) self = _str_reserve(self, cap)
 #define str_startswith(self, s) str_startswith_n(self, s, strlen(s))
 #define str_startswith_lit(self, s) str_startswith_n(self, s, sizeof(s) - 1)
 #define str_endswith(self, s) str_endswith_n(self, s, strlen(s))
@@ -74,19 +92,25 @@ typedef struct StrHeader {
     for(char* item = str_begin(self); item != str_end(self); item++) // NOLINT
 // clang-format on
 
-inline Str _str_ensure_capacity(Str self, uintptr_t newcap) {
+inline StrAlloc str_getallocator(Str self, void** ctx) {
+    StrHeader* hdr = str_header(self);
+    if(ctx) *ctx = hdr->ctx;
+    return hdr->alloc;
+}
+
+inline Str _str_reserve(Str self, uintptr_t newcap) {
     StrHeader* hdr = str_header(self);
     if(hdr->capacity >= newcap) return self;
 
-    StrHeader* newhdr = (StrHeader*)calloc(1, sizeof(StrHeader) + newcap + 1);
-    memcpy(newhdr, hdr, sizeof(StrHeader) + hdr->capacity);
+    StrHeader* newhdr = (StrHeader*)hdr->alloc(
+        hdr->ctx, hdr, sizeof(StrHeader) + hdr->capacity + 1,
+        sizeof(StrHeader) + newcap + 1);
     newhdr->capacity = newcap;
-    free(hdr);
     return newhdr->str;
 }
 
 inline Str _str_resize(Str self, uintptr_t newn) {
-    self = _str_ensure_capacity(self, newn);
+    self = _str_reserve(self, newn);
     str_header(self)->length = newn;
     return self;
 }
@@ -97,7 +121,7 @@ inline Str str_ins_n(Str self, uintptr_t idx, const char* s, uintptr_t n) {
     assert(idx <= len);            // Index out of range
 
     uintptr_t newlen = len + n;
-    self = _str_ensure_capacity(self, newlen);
+    self = _str_reserve(self, newlen);
 
     // If we are appending (idx == len), skip memmove
     if(idx < len) {
@@ -127,16 +151,47 @@ inline Str str_del(Str self, uintptr_t start, uintptr_t n) {
     return self;      // Return the modified string
 }
 
-inline Str _str_create_n(const char* s, uintptr_t n) {
-    uintptr_t cap = (n ? (n + 1) : sizeof(uintptr_t)) << 1;
-    StrHeader* hdr = (StrHeader*)malloc(sizeof(StrHeader) + cap);
-    if(!hdr) return nullptr;
+inline void* _str_defaultalloc(void* ctx, void* ptr, uintptr_t osize,
+                               uintptr_t nsize) {
+    (void)ctx;
 
+    if(nsize == 0) {
+        free(ptr);
+        return NULL;
+    }
+
+    void* p = calloc(1, nsize);
+
+    if(!p) {
+        fprintf(stderr, "Str allocation failed\n");
+        abort();
+        return NULL;
+    }
+
+    if(ptr) {
+        memcpy(p, ptr, osize);
+        free(ptr);
+    }
+
+    return p;
+}
+
+inline Str _str_alloc_n(void* ctx, StrAlloc alloc, const char* s, uintptr_t n) {
+    uintptr_t cap = (n ? n : sizeof(uintptr_t)) << 1;
+    StrHeader* hdr =
+        (StrHeader*)alloc(ctx, NULL, 0, sizeof(StrHeader) + cap + 1);
+    hdr->ctx = ctx;
+    hdr->alloc = alloc;
     hdr->length = 0;
     hdr->capacity = cap;
-
     if(s) return str_ins_n(hdr->str, str_npos, s, n);
     return hdr->str;
+}
+
+inline void str_destroy(Str self) {
+    if(!self) return;
+    StrHeader* hdr = str_header(self);
+    hdr->alloc(hdr->ctx, hdr, sizeof(StrHeader) + hdr->capacity + 1, 0);
 }
 
 inline Str _str_replace_n(Str self, const char* oldsub, uintptr_t oldn,

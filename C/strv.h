@@ -1,3 +1,11 @@
+//  ___ _____ _____   __
+// / __|_   _| _ \ \ / /  StringView implementation for C
+// \__ \ | | |   /\ V /   Version: 1.0
+// |___/ |_| |_|_\ \_/    https://github.com/Dax89
+//
+// SPDX-FileCopyrightText: 2025 Antonio Davide Trogu <contact@antoniodavide.dev>
+// SPDX-License-Identifier: MIT
+
 #pragma once
 
 #if defined(__cplusplus)

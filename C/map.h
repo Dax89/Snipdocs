@@ -1,3 +1,11 @@
+//  __  __   _   ___
+// |  \/  | /_\ | _ \  Open-Addressing HashTable implementation for C
+// | |\/| |/ _ \|  _/  Version: 1.0
+// |_|  |_/_/ \_\_|    https://github.com/Dax89
+//
+// SPDX-FileCopyrightText: 2025 Antonio Davide Trogu <contact@antoniodavide.dev>
+// SPDX-License-Identifier: MIT
+
 #pragma once
 
 #if defined(__cplusplus)
@@ -9,6 +17,7 @@ extern "C" {
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -25,15 +34,22 @@ enum {
 #define map_bucket_fields                                                      \
     uintptr_t hash;                                                            \
     ptrdiff_t state
-;
+
 // clang-format off
+
+typedef void* (*MapAlloc)(void* ctx, void* ptr, uintptr_t osize,
+                          uintptr_t nsize);
+
 typedef struct MapBucket { map_bucket_fields; } MapBucket;
 #define Map(KV) KV*
 
 #define map_header(self) ((MapHeader*)(((char*)(self)) - offsetof(MapHeader, buckets)))
-#define map_create_full(KV, n, hashfn, equalsfn) (Map(KV))_map_create_n(sizeof(KV), n, hashfn, equalsfn) 
-#define map_create_n(KV, n) map_create_full(KV, n, _map_hash__##KV, _map_equals__##KV) 
-#define map_create(KV) map_create_n(KV, map_default_size) 
+#define map_alloc_full(KV, ctx, allocfn, n, hashfn, equalsfn) (Map(KV))_map_alloc_n(ctx, allocfn, sizeof(KV), n, hashfn, equalsfn) 
+#define map_alloc_n(KV, ctx, allocfn, n) map_alloc_full(KV, ctx, allocfn, n, _map_hash__##KV, _map_equals__##KV) 
+#define map_alloc(KV, ctx, allocfn) map_alloc_n(KV, ctx, allocfn, map_default_size) 
+#define map_create_full(KV, n, hashfn, equalsfn) map_alloc_full(KV, NULL, _map_defaultalloc, n, hashfn, equalsfn)
+#define map_create_n(KV, n) map_alloc_n(KV, NULL, _map_defaultalloc, n) 
+#define map_create(KV) map_alloc(KV, NULL, _map_defaultalloc) 
 #define map_begin(self) (self)
 #define map_end(self) ((self) + map_header(self)->capacity)
 #define map_length(self) (map_header(self)->length)
@@ -123,6 +139,8 @@ typedef void (*MapItemDel)(MapBucket*);
 // clang-format on
 
 typedef struct MapHeader {
+    void* ctx;
+    MapAlloc alloc;
     uintptr_t length;
     uintptr_t tombs;
     uintptr_t capacity;
@@ -143,6 +161,12 @@ typedef struct MapHeader {
 #else
     #error "Unknown platform"
 #endif
+
+inline MapAlloc map_getallocator(Map(void) self, void** ctx) {
+    MapHeader* hdr = map_header(self);
+    if(ctx) *ctx = hdr->ctx;
+    return hdr->alloc;
+}
 
 inline void map_clear(Map(void) self) {
     MapHeader* hdr = map_header(self);
@@ -168,8 +192,10 @@ inline void map_clear(Map(void) self) {
 
 inline void map_destroy(Map(void) self) {
     if(self) {
-        if(map_header(self)->itemdel) map_clear(self);
-        free(map_header(self));
+        MapHeader* hdr = map_header(self);
+        if(hdr->itemdel) map_clear(self);
+        hdr->alloc(hdr->ctx, hdr,
+                   sizeof(MapHeader) + (hdr->bucketsize * hdr->capacity), 0);
     }
 }
 
@@ -233,14 +259,40 @@ inline uintptr_t _map_defaultprobe(const MapHeader* self, uintptr_t idx) {
     return (uintptr_t)((idx + 1) % self->capacity);
 }
 
-inline Map(void) _map_create_n(uintptr_t bucketsize, uintptr_t cap,
-                               MapHash hashfn, MapEquals equalsfn) {
+inline void* _map_defaultalloc(void* ctx, void* ptr, uintptr_t osize,
+                               uintptr_t nsize) {
+    (void)ctx;
+
+    if(nsize == 0) {
+        free(ptr);
+        return NULL;
+    }
+
+    void* p = calloc(1, nsize);
+
+    if(!p) {
+        fprintf(stderr, "Map allocation failed\n");
+        abort();
+        return NULL;
+    }
+
+    if(ptr) {
+        memcpy(p, ptr, osize);
+        free(ptr);
+    }
+
+    return p;
+}
+
+inline Map(void)
+    _map_alloc_n(void* ctx, MapAlloc alloc, uintptr_t bucketsize, uintptr_t cap,
+                 MapHash hashfn, MapEquals equalsfn) {
     if(!bucketsize || !cap) return NULL;
 
     MapHeader* hdr =
-        (MapHeader*)calloc(1, sizeof(MapHeader) + (bucketsize * cap));
-    if(!hdr) return NULL;
-
+        (MapHeader*)alloc(ctx, NULL, 0, sizeof(MapHeader) + (bucketsize * cap));
+    hdr->ctx = ctx;
+    hdr->alloc = alloc;
     hdr->length = 0;
     hdr->capacity = cap;
     hdr->bucketsize = bucketsize;
@@ -257,9 +309,11 @@ inline Map(void)
     if(!newcap) newcap = hdr->capacity; // Just rehash
     else if(hdr->capacity >= newcap) return self;
 
-    MapHeader* newhdr =
-        (MapHeader*)calloc(1, sizeof(MapHeader) + (hdr->bucketsize * newcap));
+    MapHeader* newhdr = (MapHeader*)hdr->alloc(
+        hdr->ctx, NULL, 0, sizeof(MapHeader) + (hdr->bucketsize * newcap));
 
+    newhdr->ctx = hdr->ctx;
+    newhdr->alloc = hdr->alloc;
     newhdr->length = 0;
     newhdr->tombs = 0;
     newhdr->capacity = newcap;
@@ -284,14 +338,14 @@ inline Map(void)
         --len;
     }
 
-    free(hdr);
+    hdr->alloc(hdr->ctx, hdr,
+               sizeof(MapHeader) + (hdr->bucketsize * hdr->capacity), 0);
     return newself;
 }
 
 inline Map(void) _map_check_rehash(Map(void) self, uintptr_t n) {
-    if(map_loadfactor(self) >= map_max_loadfactor) {
+    if(map_loadfactor(self) >= map_max_loadfactor)
         return _map_rehash(self, n, map_header(self)->capacity << 1);
-    }
 
     return self;
 }
