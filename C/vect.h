@@ -80,6 +80,12 @@ typedef struct VectHeader {
 
 // clang-format on
 
+inline VectAlloc vect_getallocator(Vect(void) self, void** ctx) {
+    VectHeader* hdr = vect_header(self);
+    if(ctx) *ctx = hdr->ctx;
+    return hdr->alloc;
+}
+
 inline void* _vect_defaultalloc(void* ctx, void* ptr, uintptr_t osize,
                                 uintptr_t nsize) {
     (void)ctx;
