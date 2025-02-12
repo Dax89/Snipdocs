@@ -52,8 +52,8 @@ typedef struct MapBucket { map_bucket_fields; } MapBucket;
 #define map_create(KV) map_alloc(KV, NULL, _map_defaultalloc) 
 #define map_begin(self) (self)
 #define map_end(self) ((self) + map_header(self)->capacity)
-#define map_length(self) (map_header(self)->length)
-#define map_capacity(self) (map_header(self)->capacity)
+#define map_length(self) ((self) ? map_header(self)->length : 0)
+#define map_capacity(self) ((self) ? map_header(self)->capacity : 0)
 #define map_loadfactor(self) ((float)(map_header(self)->length + map_header(self)->tombs) / (float)map_header(self)->capacity)
 #define map_empty(self) (!(self) || !map_header(self)->length)
 #define map_getbucket(KV, self, k) _map_getbucket__##KV(self, k)
@@ -68,8 +68,9 @@ typedef struct MapBucket { map_bucket_fields; } MapBucket;
 #define map_setitemdel(self, itemdelfn) map_header(self)->itemdel = itemdelfn
 
 #define map_foreach(KV, item, self)                                             \
-    for(Map(KV) item = map_begin(self); item != map_end(self); ++item)          \
-        if(item->state == MS_FULL)
+    if(self)                                                                    \
+        for(Map(KV) item = map_begin(self); item != map_end(self); ++item)      \
+            if(item->state == MS_FULL)
 
 #define _MapItemType(KV, K, V)                                                  \
     typedef K KV##Key;                                                          \
@@ -85,6 +86,7 @@ typedef struct MapBucket { map_bucket_fields; } MapBucket;
         return NULL;                                                            \
     }                                                                           \
     inline Map(KV) _map_set__##KV(Map(KV) self, K k, V v) {                     \
+        if(!self) return NULL;                                                  \
         self = (KV*)_map_check_rehash(self, sizeof(K));                         \
         uintptr_t idx =                                                         \
             _map_findbucket(self, &k, sizeof(K), true);                         \
@@ -93,11 +95,13 @@ typedef struct MapBucket { map_bucket_fields; } MapBucket;
         return self;                                                            \
     }                                                                           \
     inline const V* _map_get__##KV(const Map(KV) self, K k) {                   \
+        if(!self) return NULL;                                                  \
         const KV* b = _map_getbucket__##KV(self, k);                            \
-        if(b) return &b->value;                                                 \
+        if(b) return (const V*)&b->value;                                       \
         return NULL;                                                            \
     }                                                                           \
     inline bool _map_del__##KV(Map(KV) self, K k) {                             \
+        if(!self) return false;                                                 \
         uintptr_t idx =                                                         \
             _map_findbucket(self, &k, sizeof(K), false);                        \
         if(self[idx].state != MS_FULL) return false;                            \
@@ -133,7 +137,7 @@ typedef struct MapBucket { map_bucket_fields; } MapBucket;
 struct MapHeader;
 
 typedef uintptr_t (*MapHash)(const void*, uintptr_t);
-typedef uintptr_t (*MapProbe)(const MapHeader*, uintptr_t);
+typedef uintptr_t (*MapProbe)(const struct MapHeader*, uintptr_t);
 typedef bool (*MapEquals)(const void*, const void*, uintptr_t);
 typedef void (*MapItemDel)(MapBucket*);
 // clang-format on
@@ -153,13 +157,13 @@ typedef struct MapHeader {
 } MapHeader;
 
 #if UINTPTR_MAX == 0xFFFFFFFF // 32-bit platform
-    #define map_fnv1a_prime1 2166136261U
-    #define map_fnv1a_prime2 16777619
+#define map_fnv1a_prime1 2166136261U
+#define map_fnv1a_prime2 16777619
 #elif UINTPTR_MAX == 0xFFFFFFFFFFFFFFFF // 64-bit platform
-    #define map_fnv1a_prime1 14695981039346656037ULL
-    #define map_fnv1a_prime2 1099511628211
+#define map_fnv1a_prime1 14695981039346656037ULL
+#define map_fnv1a_prime2 1099511628211
 #else
-    #error "Unknown platform"
+#error "Unknown platform"
 #endif
 
 inline MapAlloc map_getallocator(Map(void) self, void** ctx) {
@@ -181,7 +185,8 @@ inline void map_clear(Map(void) self) {
             if(hdr->itemdel) hdr->itemdel(b);
             --hdr->length;
         }
-        else if(b->state == MS_TOMB) --hdr->tombs;
+        else if(b->state == MS_TOMB)
+            --hdr->tombs;
 
         b->state = MS_NULL;
     }
@@ -240,14 +245,16 @@ inline uintptr_t _map_findbucket(const Map(void) self, const void* key,
                     idx = tombidx;
                     hdr->tombs--;
                 }
-                else hdr->length++;
+                else
+                    hdr->length++;
 
                 citem->hash = h;
                 citem->state = MS_FULL;
                 return idx;
             }
         } // Case 3: Read or Delete (Search)
-        else if(citem->state == MS_NULL) return idx;
+        else if(citem->state == MS_NULL)
+            return idx;
     }
 
     // Should never reach here, but prevents undefined behavior
@@ -306,8 +313,10 @@ inline Map(void)
 inline Map(void)
     _map_rehash(Map(void) self, uintptr_t keysize, uintptr_t newcap) {
     MapHeader* hdr = map_header(self);
-    if(!newcap) newcap = hdr->capacity; // Just rehash
-    else if(hdr->capacity >= newcap) return self;
+    if(!newcap)
+        newcap = hdr->capacity; // Just rehash
+    else if(hdr->capacity >= newcap)
+        return self;
 
     MapHeader* newhdr = (MapHeader*)hdr->alloc(
         hdr->ctx, NULL, 0, sizeof(MapHeader) + (hdr->bucketsize * newcap));
