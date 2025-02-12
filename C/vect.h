@@ -50,8 +50,8 @@ typedef struct VectHeader {
 #define vect_last(self) ((self)[vect_header(self)->length - 1])
 #define vect_resize(T, self, n) self = (Vect(T))_vect_resize(self, n))
 #define vect_reserve(T, self, cap) self = (Vect(T))_vect_reserve(self, cap)
-#define vect_length(self) (vect_header(self)->length)
-#define vect_capacity(self) (vect_header(self)->capacity)
+#define vect_length(self) ((self) ? vect_header(self)->length : 0)
+#define vect_capacity(self) ((self) ? vect_header(self)->capacity : 0)
 #define vect_empty(self) (!(self) || !vect_header(self)->length)
 #define vect_setitemdel(self, itemdelfn) vect_header(self)->itemdel = itemdelfn
 #define vect_clear(self) _vect_clear((void*)(self))
@@ -76,7 +76,8 @@ typedef struct VectHeader {
 #define vect_pop(self) vect_pop_n(self, 1)
 
 #define vect_foreach(T, item, self)                 \
-    for(T* item = vect_begin(self); item != vect_end(self); item++) // NOLINT
+    if(self)                                        \
+        for(T* item = vect_begin(self); item != vect_end(self); item++) // NOLINT
 
 // clang-format on
 
@@ -113,7 +114,7 @@ inline void* _vect_defaultalloc(void* ctx, void* ptr, uintptr_t osize,
 
 inline Vect(void)
     _vect_alloc_n(void* ctx, VectAlloc alloc, uintptr_t itemsize, uintptr_t n) {
-    uintptr_t cap = (n ? (n + 1) : sizeof(uintptr_t)) << 1;
+    uintptr_t cap = (n ? n : sizeof(uintptr_t)) << 1;
     VectHeader* hdr =
         (VectHeader*)alloc(ctx, NULL, 0, sizeof(VectHeader) + (itemsize * cap));
     hdr->ctx = ctx;
