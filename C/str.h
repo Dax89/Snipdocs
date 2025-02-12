@@ -33,27 +33,29 @@ typedef struct StrHeader {
     char str[1];
 } StrHeader;
 
-#define Str char*
+typedef char* Str;
 
 // clang-format off
 #define str_npos (uintptr_t)-1
 #define str_header(self) ((StrHeader*)((self) - offsetof(StrHeader, str)))
-#define str_alloc(ctx, allocfn) _str_alloc_n(ctx, allocfn, 0)
+#define str_alloc(ctx, allocfn) _str_alloc_n(ctx, allocfn, NULL, 0)
 #define str_alloc_n(ctx, allocfn, n) _str_alloc_n(ctx, allocfn, NULL, n)
 #define str_alloc_lit(ctx, allocfn, s) _str_alloc_n(ctx, allocfn, s, sizeof(s) - 1)
-#define str_alloc_from(ctx, allocfn, s) _str_alloc_n(ctx, allocfn, s, strlen(s))
+#define str_alloc_from_n(ctx, allocfn, s, n) _str_alloc_n(ctx, allocfn, s, n)
+#define str_alloc_from(ctx, allocfn, s) str_alloc_from_n(ctx, allocfn, s, strlen(s))
 #define str_alloc_from_strv(ctx, allocfn, strv) _str_alloc_n(ctx, allocfn, (strv).str, (strv).length)
 #define str_create() str_alloc(NULL, _str_defaultalloc)
 #define str_create_n(n) str_alloc_n(NULL, _str_defaultalloc, n)
 #define str_create_lit(s) str_alloc_lit(NULL, _str_defaultalloc, s)
+#define str_create_from_n(s, n) str_alloc_from_n(NULL, _str_defaultalloc, s, n)
 #define str_create_from(s) str_alloc_from(NULL, _str_defaultalloc, s)
 #define str_create_from_strv(strv) str_alloc_from_strv(NULL, _str_defaultalloc, strv)
 #define str_begin(self) (self)
 #define str_end(self) ((self) + str_header(self)->length - 1)
 #define str_first(self) ((self)[0])
 #define str_last(self) ((self)[str_header(self)->length - 1])
-#define str_length(self) (str_header(self)->length)
-#define str_capacity(self) (str_header(self)->capacity)
+#define str_length(self) ((self) ? str_header(self)->length : 0)
+#define str_capacity(self) ((self) ? str_header(self)->capacity : 0)
 #define str_empty(self) (!(self) || !str_header(self)->length)
 #define str_equals(self, rhs) str_equals_n(self, rhs, strlen(rhs))
 #define str_equals_lit(self, rhs) str_equals_n(self, rhs, sizeof(rhs) - 1)
@@ -88,8 +90,9 @@ typedef struct StrHeader {
 
 #define str_pop(self) str_pop_n(self, 1)
 
-#define str_foreach(item, self)               \
-    for(char* item = str_begin(self); item != str_end(self); item++) // NOLINT
+#define str_foreach(item, self)                                          \
+    if(self)                                                             \
+        for(char* item = str_begin(self); item != str_end(self); item++)
 // clang-format on
 
 inline StrAlloc str_getallocator(Str self, void** ctx) {
@@ -182,7 +185,7 @@ inline Str _str_alloc_n(void* ctx, StrAlloc alloc, const char* s, uintptr_t n) {
         (StrHeader*)alloc(ctx, NULL, 0, sizeof(StrHeader) + cap + 1);
     hdr->ctx = ctx;
     hdr->alloc = alloc;
-    hdr->length = 0;
+    hdr->length = n;
     hdr->capacity = cap;
     if(s) return str_ins_n(hdr->str, str_npos, s, n);
     return hdr->str;
